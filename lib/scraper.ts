@@ -22,8 +22,8 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
   try {
     console.log('Fetching tenders from Job in Rwanda and Umucyo...');
     
-    // Fetch from both sources in parallel
-    const [jobInRwandaResponse, umucyoResponse] = await Promise.all([
+    // Use allSettled so one failure doesn't kill the other
+    const [jobInRwandaResult, umucyoResult] = await Promise.allSettled([
       axios.get(`${JOB_IN_RWANDA_URL}/jobs/tender`, { 
         timeout: 15000,
         headers: {
@@ -41,8 +41,11 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
     const tenders: Tender[] = [];
     
     // Parse Job in Rwanda tenders
+    if (jobInRwandaResult.status === 'rejected') {
+      console.error('Job in Rwanda fetch failed:', jobInRwandaResult.reason?.message);
+    } else {
     console.log('Parsing Job in Rwanda tenders...');
-    const $jobInRwanda = cheerio.load(jobInRwandaResponse.data);
+    const $jobInRwanda = cheerio.load(jobInRwandaResult.value.data);
     
     $jobInRwanda('.views-row').each((index, element) => {
       try {
@@ -94,20 +97,25 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
         console.error('Error parsing Job in Rwanda tender:', err);
       }
     });
+    } // end jobInRwanda else
     
     // Parse Umucyo tenders
+    if (umucyoResult.status === 'rejected') {
+      console.error('Umucyo fetch failed:', umucyoResult.reason?.message);
+    } else {
     console.log('Parsing Umucyo tenders...');
-    const $umucyo = cheerio.load(umucyoResponse.data);
+    const $umucyo = cheerio.load(umucyoResult.value.data);
     
     $umucyo('#content1 ul.notice li').each((index, element) => {
       try {
         const $el = $umucyo(element);
-        const title = $el.find('span[title]').last().attr('title') || $el.find('span').last().text().trim();
+        // Second span holds the full title in its title attribute
+        const title = $el.find('span[title]').not('.class').attr('title') || $el.find('span[title]').last().attr('title') || '';
         const tenderCategory = $el.find('span.class').attr('title') || $el.find('span.class').text().trim();
         const dateText = $el.find('span.Date').text().trim();
         const onclickAttr = $el.find('a').attr('onclick') || '';
         
-        // Extract tender ID from onclick attribute
+        // Their site has a typo: "javacsript:" — match both
         const tenderIdMatch = onclickAttr.match(/fn_viewTendNtceDetail\('([^']+)'/);
         const tenderId = tenderIdMatch ? tenderIdMatch[1] : '';
         
@@ -130,6 +138,7 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
         console.error('Error parsing Umucyo tender:', err);
       }
     });
+    } // end umucyo else
     
     console.log(`Successfully scraped ${tenders.length} tenders (Job in Rwanda + Umucyo)`);
     

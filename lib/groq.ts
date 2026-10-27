@@ -91,6 +91,7 @@ WRITING GUIDELINES:
 - Use concrete examples and quantifiable metrics
 - Maintain formal business tone throughout
 - Ensure logical flow between sections
+- IMPORTANT: Do NOT use any box-drawing characters such as ═, ║, ╔, ╗, ╚, ╝, ┌, ┐, └, ┘, │, ─, or any Unicode line/border characters. Use only plain dashes (---) for dividers and plain text for all headings and sections.
 
 Make this proposal compelling, detailed, and ready for submission. Write in a way that clearly demonstrates why we are the best choice for this tender.`;
 
@@ -131,17 +132,7 @@ function generateMockProposal(tenderDetails: string, requirements: string): stri
     day: 'numeric' 
   });
   
-  return `═══════════════════════════════════════════════════════════════════════════════
-                        TECHNICAL AND FINANCIAL PROPOSAL
-═══════════════════════════════════════════════════════════════════════════════
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│                         [COMPANY LOGO PLACEHOLDER]                          │
-│                                                                             │
-│                    Insert your company logo here (300x100px)                │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+  return `## TECHNICAL AND FINANCIAL PROPOSAL
 
 TENDER REFERENCE: ${tenderDetails.split('\n')[0]}
 SUBMISSION DATE: ${currentDate}
@@ -151,9 +142,8 @@ TELEPHONE: [+250 XXX XXX XXX]
 EMAIL: [company@email.com]
 WEBSITE: [www.yourcompany.rw]
 
-═══════════════════════════════════════════════════════════════════════════════
-                            1. EXECUTIVE SUMMARY
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 1. EXECUTIVE SUMMARY
 
 We are pleased to submit this comprehensive proposal in response to the above-referenced 
 tender opportunity. Our organization brings extensive experience, proven capabilities, and 
@@ -176,9 +166,8 @@ KEY VALUE PROPOSITIONS:
 Our proposal demonstrates how we will deliver superior value through innovative approaches,
 efficient resource utilization, and unwavering commitment to project success.
 
-═══════════════════════════════════════════════════════════════════════════════
-              2. UNDERSTANDING OF REQUIREMENTS & PROJECT CONTEXT
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 2. UNDERSTANDING OF REQUIREMENTS & PROJECT CONTEXT
 
 DETAILED REQUIREMENTS ANALYSIS:
 
@@ -221,9 +210,8 @@ Challenge 3: Local Capacity Building
 Solution: Structured training programs and knowledge transfer sessions to build sustainable 
 local capacity and ensure long-term project success.
 
-═══════════════════════════════════════════════════════════════════════════════
-              3. TECHNICAL APPROACH & IMPLEMENTATION METHODOLOGY
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 3. TECHNICAL APPROACH & IMPLEMENTATION METHODOLOGY
 
 IMPLEMENTATION FRAMEWORK:
 
@@ -310,9 +298,8 @@ INNOVATION & BEST PRACTICES:
 • Digital project management and reporting systems
 • Continuous improvement through lessons learned sessions
 
-═══════════════════════════════════════════════════════════════════════════════
-              4. ORGANIZATIONAL CAPACITY & RELEVANT EXPERIENCE
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 4. ORGANIZATIONAL CAPACITY & RELEVANT EXPERIENCE
 
 COMPANY PROFILE:
 
@@ -384,9 +371,8 @@ LOCAL PRESENCE & PARTNERSHIPS:
 • Commitment to local content and capacity building
 • Active member of relevant professional associations in Rwanda
 
-═══════════════════════════════════════════════════════════════════════════════
-                  5. TECHNICAL SPECIFICATIONS & DELIVERABLES
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 5. TECHNICAL SPECIFICATIONS & DELIVERABLES
 
 DETAILED DELIVERABLES MATRIX:
 
@@ -416,9 +402,8 @@ QUALITY STANDARDS & BENCHMARKS:
 • Industry-specific quality benchmarks and best practices
 • Client-specified performance indicators and acceptance criteria
 
-═══════════════════════════════════════════════════════════════════════════════
-                    6. PROJECT MANAGEMENT & TIMELINE
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 6. PROJECT MANAGEMENT & TIMELINE
 
 DETAILED PROJECT SCHEDULE:
 
@@ -457,9 +442,8 @@ STAKEHOLDER ENGAGEMENT:
 • Collaborative problem-solving approach
 • Feedback mechanisms for continuous improvement
 
-═══════════════════════════════════════════════════════════════════════════════
-                      7. BUDGET & VALUE FOR MONEY
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 7. BUDGET & VALUE FOR MONEY
 
 COST STRUCTURE:
 
@@ -498,9 +482,8 @@ COST OPTIMIZATION STRATEGIES:
 • Local sourcing where possible to reduce costs
 • Streamlined processes to minimize overhead
 
-═══════════════════════════════════════════════════════════════════════════════
-                  8. COMPLIANCE & SUSTAINABILITY
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 8. COMPLIANCE & SUSTAINABILITY
 
 REGULATORY COMPLIANCE:
 
@@ -534,9 +517,8 @@ CAPACITY BUILDING COMMITMENTS:
 • Support for local enterprise development
 • Contribution to Rwanda's human capital development goals
 
-═══════════════════════════════════════════════════════════════════════════════
-                      9. CONCLUSION & COMMITMENT
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 9. CONCLUSION & COMMITMENT
 
 We are confident that our proposal demonstrates:
 
@@ -568,9 +550,8 @@ We commit to:
 We look forward to the opportunity to partner with you on this important project and 
 demonstrate our capabilities in delivering exceptional results.
 
-═══════════════════════════════════════════════════════════════════════════════
-                    10. MANDATORY SUPPORTING DOCUMENTS
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 10. MANDATORY SUPPORTING DOCUMENTS
 
 Please ensure the following documents are attached with this proposal:
 
@@ -603,95 +584,48 @@ COMPLIANCE DOCUMENTS:
 NOTE: All documents must be certified true copies. Original documents may be requested 
 for verification during evaluation.
 
-═══════════════════════════════════════════════════════════════════════════════
-                        11. AUTHORIZED SIGNATURES
-═══════════════════════════════════════════════════════════════════════════════
+---
+## 11. DECLARATION & AUTHORIZED SIGNATURES
 
-DECLARATION:
+We declare that all information provided in this proposal is true and accurate to the best of our knowledge. We understand that any misrepresentation may lead to disqualification or contract termination.
 
-We declare that all information provided in this proposal is true and accurate to the 
-best of our knowledge. We understand that any misrepresentation may lead to 
-disqualification or contract termination.
-
-We confirm that we have read, understood, and accept all terms and conditions of the 
-tender document. We commit to execute the project as per specifications if awarded.
+We confirm that we have read, understood, and accept all terms and conditions of the tender document. We commit to execute the project as per specifications if awarded.
 
 
-AUTHORIZED SIGNATORY:
+**AUTHORIZED SIGNATORY**
 
-Name: _________________________________________
+Name:          _________________________________________
 
 Title/Position: _________________________________________
 
-Signature: _________________________________________
+Signature:     _________________________________________
 
-Date: ${currentDate}
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│                      [COMPANY OFFICIAL STAMP/SEAL]                          │
-│                                                                             │
-│                    Affix your company stamp here                            │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+Date:          ${currentDate}
 
 
-WITNESS (If Required):
+**WITNESS (If Required)**
 
-Name: _________________________________________
+Name:          _________________________________________
 
 Title/Position: _________________________________________
 
-Signature: _________________________________________
+Signature:     _________________________________________
 
-Date: _________________________________________
+Date:          _________________________________________
 
 
-COMPANY CONTACT INFORMATION:
+**COMPANY CONTACT INFORMATION**
 
-Primary Contact Person: _________________________________________
-Mobile: _________________________________________
-Email: _________________________________________
-Alternative Contact: _________________________________________
-Emergency Contact: _________________________________________
+Primary Contact: _________________________________________
+Mobile:          _________________________________________
+Email:           _________________________________________
 
-═══════════════════════════════════════════════════════════════════════════════
-
-SUBMISSION INSTRUCTIONS:
-
-1. Print this proposal on company letterhead
-2. Insert company logo at the designated space on page 1
-3. Sign all required signature fields
-4. Affix official company stamp/seal
-5. Attach all mandatory supporting documents (checklist above)
-6. Submit in sealed envelope marked with tender reference number
-7. Ensure submission before deadline specified in tender notice
-
-For electronic submissions:
-• Save as PDF with all signatures and stamps scanned
-• File name format: [TenderRef]_[CompanyName]_Proposal.pdf
-• Submit through official procurement portal or email as instructed
-
-═══════════════════════════════════════════════════════════════════════════════
+---
 
 Respectfully submitted,
 
 [Your Organization Name]
 [Authorized Signatory Name and Title]
-[Contact Information]
 
-Date: ${currentDate}
-
-═══════════════════════════════════════════════════════════════════════════════
-                              END OF PROPOSAL
-═══════════════════════════════════════════════════════════════════════════════
-
-NOTE: This is a comprehensive sample proposal generated for demonstration purposes. 
-To generate AI-powered custom proposals tailored to specific tenders, please configure 
-your GROQ_API_KEY in the .env.local file.
-
-Get your free API key at: https://console.groq.com/keys
-
-═══════════════════════════════════════════════════════════════════════════════`;
+Date: ${currentDate}`;
 }
