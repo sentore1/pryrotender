@@ -1,530 +1,262 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-import React from 'react';
 import Image from 'next/image';
-import { Tender } from '@/lib/scraper';
+import Link from 'next/link';
 
-const NAV_ITEMS = [
-  { label: 'All Tenders', icon: '▦', cat: '' },
-  { label: 'IT & Technology', icon: '⬡', cat: 'IT Technology Software' },
-  { label: 'Construction', icon: '⬢', cat: 'Construction Infrastructure Building' },
-  { label: 'Medical', icon: '⬡', cat: 'Medical Healthcare Hospital' },
-  { label: 'Consultancy', icon: '⬡', cat: 'Consultancy Consulting Services' },
-  { label: 'Goods & Supply', icon: '⬡', cat: 'Goods Supply Equipment' },
+const SAMPLE_TENDERS = [
+  { id: 1, title: 'Supply of ICT Equipment for Ministry of Education', org: 'Ministry of Education', deadline: '2025-08-15', cat: 'IT', source: 'Umucyo Gov' },
+  { id: 2, title: 'Construction of District Hospital – Phase 2', org: 'Rwanda Health Board', deadline: '2025-08-20', cat: 'Construction', source: 'Umucyo Gov' },
+  { id: 3, title: 'Consultancy for Strategic Plan Development', org: 'RURA', deadline: '2025-08-10', cat: 'Consultancy', source: 'Job in Rwanda' },
+  { id: 4, title: 'Supply of Medical Consumables and Pharmaceuticals', org: 'RNPHR', deadline: '2025-08-25', cat: 'Medical', source: 'Umucyo Gov' },
+  { id: 5, title: 'Provision of Security Services – Kigali Office', org: 'BNR', deadline: '2025-09-01', cat: 'Services', source: 'Job in Rwanda' },
+  { id: 6, title: 'Supply of Office Furniture and Equipment', org: 'RDB', deadline: '2025-08-30', cat: 'Goods', source: 'Umucyo Gov' },
 ];
 
-export default function Home() {
-  const [category, setCategory] = useState('');
-  const [activeNav, setActiveNav] = useState('');
-  const [tenders, setTenders] = useState<Tender[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
-  const [proposal, setProposal] = useState('');
-  const [generating, setGenerating] = useState(false);
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
-  const [companyStamp, setCompanyStamp] = useState<string | null>(null);
-  const [searchInput, setSearchInput] = useState('');
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(580);
-  const isResizing = React.useRef(false);
+const CAT_COLORS: Record<string, string> = {
+  IT: 'bg-blue-100 text-blue-700',
+  Construction: 'bg-orange-100 text-orange-700',
+  Medical: 'bg-red-100 text-red-700',
+  Consultancy: 'bg-purple-100 text-purple-700',
+  Goods: 'bg-green-100 text-green-700',
+  Services: 'bg-yellow-100 text-yellow-700',
+};
 
-  const startResize = (e: React.MouseEvent) => {
-    isResizing.current = true;
-    const startX = e.clientX;
-    const startW = panelWidth;
-    const onMove = (ev: MouseEvent) => {
-      if (!isResizing.current) return;
-      const delta = startX - ev.clientX;
-      setPanelWidth(Math.max(320, Math.min(900, startW + delta)));
-    };
-    const onUp = () => { isResizing.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
+const WORKFLOW_STEPS = [
+  { color: 'bg-red-500', label: 'Tender published', sub: 'New government procurement posted', time: '09:41 AM', done: true },
+  { color: 'bg-blue-500', label: 'AI analyzing tender', sub: 'Extracting requirements & scope', time: '09:41 AM', done: true },
+  { color: 'bg-green-500', label: 'Proposal generated', sub: 'Technical & financial sections drafted', time: '09:42 AM', done: true },
+  { color: 'bg-purple-500', label: 'Notification sent', sub: 'Email alert dispatched to your inbox', time: '09:42 AM', done: true },
+  { color: 'bg-orange-400', label: 'Document exported', sub: 'Word file ready for submission', time: '09:42 AM', done: false },
+];
 
-  useEffect(() => { fetchTenders(''); }, []);
+const CHAT_MSGS = [
+  { from: 'user', text: 'A new ICT tender has been posted by Ministry of Education.' },
+  { from: 'ai', text: "I've analyzed the requirements. It covers supply of 500 laptops and networking equipment." },
+  { from: 'ai', text: 'Generating a full technical & financial proposal now...' },
+  { from: 'ai', text: 'Proposal ready. Deadline is Aug 15 — 3 weeks away. Download your Word document.' },
+];
 
-  const fetchTenders = async (cat: string) => {
-    setLoading(true);
-    setError('');
-    setSelectedTender(null);
-    setProposal('');
-    try {
-      const res = await fetch(`/api/tenders?category=${encodeURIComponent(cat)}`);
-      const data = await res.json();
-      if (data.success) {
-        setTenders(data.tenders);
-        if (!data.tenders.length) setError(cat ? `No tenders found for "${cat}".` : 'No tenders available.');
-      } else {
-        setError(data.error || 'Failed to fetch tenders.');
-        setTenders([]);
-      }
-    } catch {
-      setError('Network error. Please try again.');
-      setTenders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNavClick = (cat: string) => {
-    setActiveNav(cat);
-    setCategory(cat);
-    setSearchInput('');
-    fetchTenders(cat);
-  };
-
-  const handleSearch = () => {
-    setActiveNav('');
-    setCategory(searchInput);
-    fetchTenders(searchInput);
-  };
-
-  const generateProposal = async (tender: Tender) => {
-    setSelectedTender(tender);
-    setGenerating(true);
-    setProposal('');
-    setError('');
-    try {
-      const res = await fetch('/api/generate-proposal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenderDetails: `${tender.title}\n\n${tender.description}`, requirements: tender.requirements }),
-      });
-      const data = await res.json();
-      if (data.success) setProposal(data.proposal);
-      else setError(data.error || 'Failed to generate proposal.');
-    } catch {
-      setError('Error generating proposal.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(proposal).catch(() => alert('Failed to copy'));
-  };
-
-  const sendChatUpdate = async () => {
-    if (!chatInput.trim() || !proposal) return;
-    setChatLoading(true);
-    try {
-      const res = await fetch('/api/adjust-proposal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposal, instruction: chatInput }),
-      });
-      const data = await res.json();
-      if (data.success) { setProposal(data.proposal); setChatInput(''); }
-      else setError(data.error || 'Failed to update proposal.');
-    } catch {
-      setError('Error updating proposal.');
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { const r = new FileReader(); r.onloadend = () => setCompanyLogo(r.result as string); r.readAsDataURL(file); }
-  };
-
-  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { const r = new FileReader(); r.onloadend = () => setCompanyStamp(r.result as string); r.readAsDataURL(file); }
-  };
-
-  const downloadWord = async () => {
-    const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType } = await import('docx');
-    const paragraphs: Paragraph[] = [];
-
-    if (companyLogo) {
-      const res = await fetch(companyLogo);
-      const buf = await res.arrayBuffer();
-      paragraphs.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: buf, transformation: { width: 200, height: 60 }, type: 'png' })] }));
-      paragraphs.push(new Paragraph(''));
-    }
-
-    proposal.split('\n').forEach(line => {
-      paragraphs.push(new Paragraph({ children: [new TextRun({ text: line, font: 'Times New Roman', size: 24 })] }));
-    });
-
-    if (companyStamp) {
-      const res = await fetch(companyStamp);
-      const buf = await res.arrayBuffer();
-      paragraphs.push(new Paragraph(''));
-      paragraphs.push(new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ data: buf, transformation: { width: 120, height: 60 }, type: 'png' })] }));
-    }
-
-    const doc = new Document({ sections: [{ children: paragraphs }] });
-    const blob = await Packer.toBlob(doc);
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `proposal-${selectedTender?.id}.docx` });
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  };
-
-  const renderMarkdown = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      // Horizontal rule
-      if (/^[-*_]{3,}\s*$/.test(line.trim())) {
-        return <hr key={i} style={{ border: 'none', borderTop: '1px solid #ccc', margin: '10px 0' }} />;
-      }
-      // Heading 1
-      if (line.startsWith('# ')) {
-        return <p key={i} style={{ fontWeight: 'bold', fontSize: '15px', margin: '10px 0 4px' }}>{parseBold(line.slice(2))}</p>;
-      }
-      // Heading 2
-      if (line.startsWith('## ')) {
-        return <p key={i} style={{ fontWeight: 'bold', fontSize: '14px', margin: '8px 0 4px' }}>{parseBold(line.slice(3))}</p>;
-      }
-      // Heading 3
-      if (line.startsWith('### ')) {
-        return <p key={i} style={{ fontWeight: 'bold', fontSize: '13px', margin: '6px 0 2px' }}>{parseBold(line.slice(4))}</p>;
-      }
-      // Bullet
-      if (/^[*-] /.test(line)) {
-        return <p key={i} style={{ margin: '2px 0', paddingLeft: '16px' }}>{'• '}{parseBold(line.slice(2))}</p>;
-      }
-      // Empty line
-      if (!line.trim()) return <p key={i} style={{ margin: 0, minHeight: '0.8em' }}>&nbsp;</p>;
-      // Normal
-      return <p key={i} style={{ margin: '2px 0' }}>{parseBold(line)}</p>;
-    });
-  };
-
-  const parseBold = (text: string): React.ReactNode[] => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((p, i) =>
-      p.startsWith('**') && p.endsWith('**')
-        ? <strong key={i}>{p.slice(2, -2)}</strong>
-        : p
-    );
-  };
-
-  const openTenders = tenders.filter(t => !t.deadline?.toLowerCase().includes('closed'));
-  const closedTenders = tenders.filter(t => t.deadline?.toLowerCase().includes('closed'));
-
+export default function LandingPage() {
   return (
-    <div className="flex h-screen bg-[#f4f5f7] overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white flex flex-col border-r border-gray-100 shrink-0">
-        <div className="px-5 py-5 border-b border-gray-100">
-          <Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain" priority />
+    <div className="min-h-screen bg-[#f5f5f5] text-gray-900">
+
+      {/* Nav */}
+      <nav className="bg-[#f5f5f5] px-8 py-5 flex items-center justify-between max-w-6xl mx-auto">
+        <Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain" priority />
+        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
+          <a href="#features" className="hover:text-gray-900 transition">Features</a>
+          <a href="#pricing" className="hover:text-gray-900 transition">Pricing</a>
+          <a href="#tenders" className="hover:text-gray-900 transition">Tenders</a>
+          <a href="mailto:abdousentore@gmail.com" className="hover:text-gray-900 transition">Contact</a>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.cat}
-              onClick={() => handleNavClick(item.cat)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeNav === item.cat
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <span className="text-base leading-none">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="px-3 py-4 border-t border-gray-100 space-y-0.5">
-          <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-500">
-            <span>⚙</span> Settings
+        <Link href="/register"
+          className="text-sm font-semibold px-5 py-2.5 bg-white border border-gray-200 rounded-full shadow-sm hover:shadow-md hover:bg-gray-50 transition">
+          Get Started
+        </Link>
+      </nav>
+
+      {/* Hero */}
+      <section className="max-w-4xl mx-auto px-6 pt-14 pb-0 text-center">
+        {/* Social proof badge */}
+        <div className="inline-flex items-center gap-2.5 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm mb-8">
+          <div className="flex -space-x-1.5">
+            {['RW','CO','BU','MD'].map((e, i) => (
+              <span key={i} className="w-6 h-6 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-xs font-bold text-blue-600">{e}</span>
+            ))}
           </div>
-          <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-500">
-            <span>?</span> Help & Support
-          </div>
+          <span className="text-sm text-gray-600 font-medium">Trusted by 200+ Rwanda companies</span>
         </div>
-      </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-4 shrink-0">
-          <div className="flex-1 relative max-w-md">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search tenders..."
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-          >
-            {loading ? 'Loading...' : 'Search'}
-          </button>
-          <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
-            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full font-semibold">{tenders.length} tenders</span>
-          </div>
-        </header>
+        {/* Two-tone heading */}
+        <h1 className="text-5xl md:text-6xl font-bold leading-tight tracking-tight mb-4">
+          <span className="text-gray-900">Find tenders. Win contracts.</span>
+          <br />
+          <span className="text-gray-400">Powered by AI.</span>
+        </h1>
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden flex gap-0">
-          {/* Tender list */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">
-            {error && (
-              <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
-            )}
+        <p className="text-base text-gray-500 max-w-xl mx-auto mb-10 leading-relaxed">
+          Access every Rwanda government and private tender in one place.<br />
+          Generate professional proposals in seconds.
+        </p>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-64 gap-3">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-                <p className="text-sm text-gray-500">Loading tenders...</p>
+        {/* CTAs */}
+        <div className="flex items-center justify-center gap-3 mb-16">
+          <Link href="/register"
+            className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-700 transition text-sm shadow-sm">
+            Start for Free
+          </Link>
+          <Link href="#pricing"
+            className="px-6 py-3 bg-white text-gray-700 font-semibold rounded-full border border-gray-200 hover:bg-gray-50 transition text-sm shadow-sm">
+            View Pricing
+          </Link>
+        </div>
+      </section>
+
+      {/* Mockup on gradient background */}
+      <section className="relative mx-4 md:mx-12 rounded-[4px] overflow-hidden" style={{ background: 'linear-gradient(160deg, #1a6fd4 0%, #4fa3e0 40%, #7ec8a0 70%, #a8d8a8 100%)', minHeight: 480 }}>
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+
+        <div className="relative z-10 flex items-start justify-center gap-4 px-6 pt-12 pb-0 max-w-5xl mx-auto">
+          {/* Left card — Workflow */}
+          <div className="bg-white rounded-[4px] shadow-2xl w-80 shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 bg-gray-100 rounded-[4px] flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
               </div>
-            ) : (
-              <>
-                {openTenders.length > 0 && (
-                  <section className="mb-8">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Open</span>
-                      <span className="text-xs font-bold text-gray-400">{openTenders.length}</span>
+              <div>
+                <p className="text-sm font-semibold text-gray-800" style={{fontFamily:'Inter,system-ui,sans-serif'}}>New Tender Detected</p>
+                <p className="text-xs text-gray-400" style={{fontFamily:'Inter,system-ui,sans-serif'}}>Ref #TND-2025-0847 · 2 min ago</p>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-xs font-bold tracking-widest text-gray-400 uppercase mb-3">Workflow Progress</p>
+              <div className="space-y-3">
+                {WORKFLOW_STEPS.map((step, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className={`mt-0.5 w-2.5 h-2.5 rounded-full shrink-0 ${step.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-gray-700">{step.label}</p>
+                        <span className="text-xs text-gray-400 shrink-0 ml-2">{step.time} {step.done && '✓'}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{step.sub}</p>
                     </div>
-                    <div className="space-y-2">
-                      {openTenders.map(tender => (
-                        <TenderCard
-                          key={tender.id}
-                          tender={tender}
-                          selected={selectedTender?.id === tender.id}
-                          generating={generating && selectedTender?.id === tender.id}
-                          onClick={() => generateProposal(tender)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {closedTenders.length > 0 && (
-                  <section className="mb-8">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Closed</span>
-                      <span className="text-xs font-bold text-gray-400">{closedTenders.length}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {closedTenders.map(tender => (
-                        <TenderCard
-                          key={tender.id}
-                          tender={tender}
-                          selected={selectedTender?.id === tender.id}
-                          generating={generating && selectedTender?.id === tender.id}
-                          onClick={() => generateProposal(tender)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {!openTenders.length && !closedTenders.length && !error && (
-                  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <svg className="w-12 h-12 mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-sm">No tenders found</p>
                   </div>
-                )}
-              </>
-            )}
+                ))}
+              </div>
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
+                <span className="text-blue-600 text-sm">✓</span>
+                <span className="text-sm font-semibold text-blue-600">Proposal completed</span>
+                <span className="ml-auto text-xs text-gray-400">09:42 AM</span>
+              </div>
+            </div>
           </div>
 
-          {/* Proposal panel */}
-          <aside style={{ width: selectedTender ? panelWidth : 420 }} className="shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden relative">
-            {/* Drag handle */}
-            <div
-              onMouseDown={startResize}
-              className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400 transition-colors z-10"
-              title="Drag to resize"
-            />
+          {/* Right card — AI Chat */}
+          <div className="bg-white rounded-[4px] shadow-2xl w-80 shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-800">Generated Proposal</h2>
-              {selectedTender && (
-                <button onClick={() => { setSelectedTender(null); setProposal(''); }} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
-              )}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-[4px] flex items-center justify-center shrink-0">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">AI Agent</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-400">PryroTender AI</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-1">
+                {[0,1,2].map(i => <span key={i} className="w-1 h-1 rounded-full bg-gray-300 inline-block" />)}
+              </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-5">
-              {!selectedTender && (
-                <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-3">
-                  <svg className="w-14 h-14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p className="text-sm text-gray-400">Click a tender to generate a proposal</p>
-                </div>
-              )}
-
-              {selectedTender && generating && (
-                <div className="flex flex-col items-center justify-center h-full gap-3">
-                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-                  <p className="text-sm text-gray-500">Generating AI proposal...</p>
-                </div>
-              )}
-
-              {selectedTender && !generating && error && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
-              )}
-
-              {selectedTender && !generating && proposal && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 leading-snug">{selectedTender.title}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-RW', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                  </div>
-
-                  {/* Branding */}
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                    <p className="text-xs font-semibold text-gray-600">Branding (optional)</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Logo</label>
-                        <input type="file" accept="image/*" onChange={handleLogoUpload}
-                          className="block w-full text-xs text-gray-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
-                        {companyLogo && <div className="mt-1 flex items-center gap-1"><img src={companyLogo} className="h-8 object-contain" alt="logo" /><button onClick={() => setCompanyLogo(null)} className="text-xs text-red-500">✕</button></div>}
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Stamp</label>
-                        <input type="file" accept="image/*" onChange={handleStampUpload}
-                          className="block w-full text-xs text-gray-500 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
-                        {companyStamp && <div className="mt-1 flex items-center gap-1"><img src={companyStamp} className="h-8 object-contain" alt="stamp" /><button onClick={() => setCompanyStamp(null)} className="text-xs text-red-500">✕</button></div>}
-                      </div>
+            <div className="px-4 py-4 space-y-3 min-h-64">
+              {CHAT_MSGS.map((msg, i) => (
+                <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                  {msg.from === 'ai' && (
+                    <div className="w-6 h-6 rounded-[4px] bg-blue-600 flex items-center justify-center shrink-0">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     </div>
-                  </div>
-
-                  {/* Paper-style proposal */}
-                  <div className="overflow-y-auto rounded-lg shadow-md" style={{ maxHeight: 'calc(100vh - 380px)' }}>
-                    <div className="bg-white border border-gray-300 px-10 py-8" style={{ fontFamily: 'Times New Roman, serif', fontSize: '13px', lineHeight: '1.8', color: '#111' }}>
-                      {companyLogo && (
-                        <div className="text-center mb-6 pb-4 border-b border-gray-300">
-                          <img src={companyLogo} style={{ maxHeight: '80px', maxWidth: '260px', width: 'auto', display: 'inline-block', objectFit: 'contain' }} alt="logo" />
-                        </div>
-                      )}
-                      {renderMarkdown(proposal)}
-                      {/* Signature block */}
-                      <div style={{ marginTop: '40px', borderTop: '1px solid #ccc', paddingTop: '24px' }}>
-                        <p style={{ fontWeight: 'bold', marginBottom: '20px' }}>AUTHORIZED SIGNATORY</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
-                          <div>
-                            <p style={{ marginBottom: '32px' }}>Name: ___________________________</p>
-                            <p style={{ marginBottom: '32px' }}>Title: ___________________________</p>
-                            <p style={{ marginBottom: '32px' }}>Signature: ______________________</p>
-                            <p>Date: ___________________________</p>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            {companyStamp
-                              ? <img src={companyStamp} style={{ maxHeight: '100px', maxWidth: '160px', width: 'auto', objectFit: 'contain', display: 'inline-block' }} alt="stamp" />
-                              : <div style={{ width: '160px', height: '100px', border: '1px dashed #aaa', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: '11px', textAlign: 'center' }}>Company Stamp</div>
-                            }
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Chat to update */}
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600">Update proposal via chat</div>
-                    <div className="flex gap-2 p-2">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={e => setChatInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && sendChatUpdate()}
-                        placeholder="e.g. Make it more formal, add a budget section..."
-                        className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={chatLoading}
-                      />
-                      <button
-                        onClick={sendChatUpdate}
-                        disabled={chatLoading || !chatInput.trim()}
-                        className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-                      >
-                        {chatLoading ? '...' : 'Send'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button onClick={downloadWord} className="flex-1 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">⬇ Download Word</button>
-                    <button onClick={copyToClipboard} className="flex-1 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">Copy</button>
+                  )}
+                  <div className={`max-w-[85%] px-3 py-2 rounded-[4px] text-xs leading-relaxed ${msg.from === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                    {msg.text}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          </aside>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TenderCard({ tender, selected, generating, onClick }: {
-  tender: Tender; selected: boolean; generating: boolean; onClick: () => void;
-}) {
-  const categoryColors: Record<string, string> = {
-    'IT': 'bg-blue-100 text-blue-700',
-    'Construction': 'bg-orange-100 text-orange-700',
-    'Medical': 'bg-red-100 text-red-700',
-    'Consultancy': 'bg-purple-100 text-purple-700',
-    'Goods': 'bg-green-100 text-green-700',
-  };
-  const tag = Object.keys(categoryColors).find(k => tender.title?.toLowerCase().includes(k.toLowerCase()) || tender.description?.toLowerCase().includes(k.toLowerCase()));
-  const tagColor = tag ? categoryColors[tag] : 'bg-gray-100 text-gray-600';
-  const tagLabel = tag || 'Tender';
-
-  return (
-    <div
-      onClick={onClick}
-      className={`bg-white rounded-xl px-4 py-3.5 cursor-pointer transition-all ${
-        selected ? 'shadow-lg ring-2 ring-blue-100' : 'shadow-sm hover:shadow-md'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tagColor}`}>{tagLabel}</span>
-            {tender.source && (
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                tender.source === 'Umucyo (Gov)'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-violet-600 text-white'
-              }`}>
-                {tender.source === 'Umucyo (Gov)' ? 'Umucyo Gov' : 'Job in Rwanda'}
-              </span>
-            )}
-            {tender.organization && tender.organization !== 'Not specified' && (
-              <span className="text-xs font-medium text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">{tender.organization}</span>
-            )}
-            {tender.location && (
-              <span className="text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full">{tender.location}</span>
-            )}
+            <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
+              <input readOnly value="Ask anything or type a command..." className="flex-1 text-xs text-gray-400 bg-transparent outline-none cursor-default" />
+              <button className="w-7 h-7 bg-blue-600 rounded-[4px] flex items-center justify-center text-white text-xs shrink-0">→</button>
+            </div>
           </div>
-          <p className="text-sm font-semibold text-gray-800 leading-snug truncate">{tender.title}</p>
-          <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{tender.description}</p>
         </div>
-        {generating ? (
-          <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold">
-            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            Generating
+      </section>
+
+      {/* Stats */}
+      <section className="bg-white py-12 mt-16">
+        <div className="max-w-4xl mx-auto px-6 grid grid-cols-3 gap-6 text-center">
+          {[['500+', 'Active Tenders'], ['50+', 'Organizations'], ['AI-Powered', 'Proposals']].map(([val, label]) => (
+            <div key={label}>
+              <div className="text-2xl font-bold text-blue-600">{val}</div>
+              <div className="text-sm text-gray-500 mt-1">{label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Sample Tenders */}
+      <section id="tenders" className="bg-white py-16">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Live Tenders Preview</h2>
+            <p className="text-gray-500 text-sm">Sign up to access all tenders and generate proposals.</p>
           </div>
-        ) : selected ? (
-          <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold">Selected</span>
-        ) : (
-          <span className="shrink-0 px-3 py-1.5 bg-gray-50 text-gray-500 rounded-lg text-xs font-medium border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition">Generate</span>
-        )}
-      </div>
-      <div className="flex items-center gap-4 mt-2.5 text-xs text-gray-400">
-        <span className="flex items-center gap-1">
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          {tender.deadline}
-        </span>
-      </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {SAMPLE_TENDERS.map(t => (
+              <div key={t.id} className="border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CAT_COLORS[t.cat] || 'bg-gray-100 text-gray-600'}`}>{t.cat}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${t.source === 'Umucyo Gov' ? 'bg-emerald-600 text-white' : 'bg-violet-600 text-white'}`}>{t.source}</span>
+                </div>
+                <p className="text-sm font-semibold text-gray-800 leading-snug mb-1">{t.title}</p>
+                <p className="text-xs text-pink-600 font-medium mb-2">{t.org}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Deadline: {t.deadline}</span>
+                  <Link href="/register" className="text-xs font-semibold text-blue-600 hover:underline">Generate Proposal →</Link>
+                </div>
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                  <Link href="/register" className="px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-full shadow">Sign up to access</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link href="/register" className="inline-block px-6 py-3 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-700 transition text-sm">
+              View All Tenders →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="bg-[#f5f5f5] py-16">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-bold text-center mb-2">Simple Pricing</h2>
+          <p className="text-center text-gray-500 text-sm mb-10">Cancel anytime. No hidden fees.</p>
+          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition">
+              <div className="text-sm font-semibold text-gray-500 mb-1">Monthly</div>
+              <div className="text-3xl font-bold text-gray-900 mb-1">$29 <span className="text-base font-normal text-gray-400">/mo</span></div>
+              <p className="text-xs text-gray-400 mb-5">Billed monthly</p>
+              <ul className="space-y-2 text-sm text-gray-600 mb-6">
+                {['All tenders access', 'Unlimited AI proposals', 'Email notifications', 'Word export', 'Company branding'].map(f => (
+                  <li key={f} className="flex items-center gap-2"><span className="text-green-500">✓</span>{f}</li>
+                ))}
+              </ul>
+              <Link href="/register?plan=monthly" className="block text-center py-2.5 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-700 transition text-sm">Get Started</Link>
+            </div>
+            <div className="bg-white border-2 border-gray-900 rounded-2xl p-6 relative shadow-md">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1 rounded-full">Best Value</span>
+              <div className="text-sm font-semibold text-gray-900 mb-1">Annual</div>
+              <div className="text-3xl font-bold text-gray-900 mb-1">$249 <span className="text-base font-normal text-gray-400">/yr</span></div>
+              <p className="text-xs text-gray-400 mb-5">Save $99 vs monthly</p>
+              <ul className="space-y-2 text-sm text-gray-600 mb-6">
+                {['All tenders access', 'Unlimited AI proposals', 'Email notifications', 'Word export', 'Company branding', 'Priority support'].map(f => (
+                  <li key={f} className="flex items-center gap-2"><span className="text-green-500">✓</span>{f}</li>
+                ))}
+              </ul>
+              <Link href="/register?plan=annual" className="block text-center py-2.5 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-700 transition text-sm">Get Started</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-100 py-8 text-center text-xs text-gray-400">
+        <p>© {new Date().getFullYear()} PryroTender. All rights reserved.</p>
+        <p className="mt-1">Contact: <a href="mailto:abdousentore@gmail.com" className="hover:text-gray-600">abdousentore@gmail.com</a></p>
+      </footer>
     </div>
   );
 }
