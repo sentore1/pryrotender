@@ -1,12 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const plan = params.get('plan');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,9 +19,11 @@ export default function LoginPage() {
     setLoading(true); setError('');
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
-    // Store token in cookie for middleware
     document.cookie = `sb-access-token=${data.session?.access_token}; path=/; max-age=604800`;
-    // Check role
+    if (plan) {
+      router.push(`/register?reason=subscription&plan=${plan}`);
+      return;
+    }
     const { data: profile } = await supabase.from('profiles').select('role, subscription_status').eq('id', data.user!.id).single();
     if (profile?.role === 'admin') router.push('/admin');
     else router.push('/dashboard');
@@ -61,9 +65,13 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="text-center text-sm text-gray-500 mt-4">
-          Don't have an account? <Link href="/register" className="text-blue-600 font-medium hover:underline">Sign up</Link>
+          Don't have an account? <Link href={`/register${plan ? `?plan=${plan}` : ''}`} className="text-blue-600 font-medium hover:underline">Sign up</Link>
         </p>
       </div>
     </div>
   );
+}
+
+export default function LoginPage() {
+  return <Suspense><LoginForm /></Suspense>;
 }

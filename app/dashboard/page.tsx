@@ -277,8 +277,8 @@ function DashboardContent() {
         </button>
         <span className="ml-auto px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-semibold">{tenders.length} tenders</span>
       </header>
-      <div className="flex-1 overflow-hidden flex">
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-hidden flex relative">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
           {paymentStatus === 'success' && (
             <div className="mb-4 px-4 py-3 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center justify-between">
               <span>🎉 Payment successful! Your subscription is now active.</span>
@@ -323,6 +323,7 @@ function DashboardContent() {
             </>
           )}
         </div>
+        {/* Desktop proposal panel */}
         <aside style={{ width: selectedTender ? panelWidth : 420 }} className="hidden md:flex shrink-0 bg-white border-l border-gray-100 flex-col overflow-hidden relative">
           <div onMouseDown={startResize} className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400 z-10" />
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -354,6 +355,42 @@ function DashboardContent() {
             )}
           </div>
         </aside>
+
+        {/* Mobile proposal sheet */}
+        {selectedTender && (
+          <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-black/40" onClick={() => { setSelectedTender(null); setProposal(''); }} />
+            <div className="relative bg-white rounded-t-2xl flex flex-col max-h-[85vh] z-10">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-gray-800">Generated Proposal</h2>
+                <button onClick={() => { setSelectedTender(null); setProposal(''); }} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                {generating && <div className="flex flex-col items-center justify-center h-40 gap-3"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div><p className="text-sm text-gray-500">Generating AI proposal...</p></div>}
+                {!generating && proposal && (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-gray-800">{selectedTender.title}</h3>
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-700 max-h-64 overflow-y-auto">
+                      <ProposalRenderer content={proposal} />
+                    </div>
+                    <div className="flex gap-2 p-2 border border-gray-200 rounded-lg">
+                      <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendChatUpdate()}
+                        placeholder="Update proposal..." disabled={chatLoading}
+                        className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <button onClick={sendChatUpdate} disabled={chatLoading || !chatInput.trim()} className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        {chatLoading ? '...' : 'Send'}
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => navigator.clipboard.writeText(proposal)} className="flex-1 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200">Copy</button>
+                      <button onClick={() => downloadDocx(proposal, selectedTender.title)} className="flex-1 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Download DOCX</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
