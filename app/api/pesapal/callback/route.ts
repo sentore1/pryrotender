@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     const status = await statusRes.json();
     const db = supabaseAdmin();
 
-    if (status.payment_status_description === 'Completed') {
+    if (status.payment_status_description === 'COMPLETED') {
       const periodEnd = new Date();
       periodEnd.setMonth(periodEnd.getMonth() + (plan === 'annual' ? 12 : 1));
 

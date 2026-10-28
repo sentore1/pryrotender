@@ -41,6 +41,13 @@ create table notification_preferences (
   updated_at timestamptz default now()
 );
 
+-- Settings table (caches server-side config like Pesapal IPN ID)
+create table settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz default now()
+);
+
 -- Auto-create profile on signup
 create or replace function handle_new_user()
 returns trigger as $$
@@ -59,6 +66,7 @@ create trigger on_auth_user_created
 alter table profiles enable row level security;
 alter table subscriptions enable row level security;
 alter table notification_preferences enable row level security;
+alter table settings enable row level security;
 
 create policy "Users can view own profile" on profiles for select using (auth.uid() = id);
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
@@ -76,3 +84,25 @@ create policy "Admins can view all subscriptions" on subscriptions for select us
 );
 
 create policy "Users can manage own notifications" on notification_preferences for all using (auth.uid() = user_id);
+
+-- Storage: company-assets bucket (create manually in Supabase dashboard as public bucket)
+-- Then run these policies:
+-- insert into storage.buckets (id, name, public) values ('company-assets', 'company-assets', true);
+
+create policy "Users can upload own assets"
+on storage.objects for insert
+with check (
+  bucket_id = 'company-assets' AND
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+create policy "Users can update own assets"
+on storage.objects for update
+using (
+  bucket_id = 'company-assets' AND
+  auth.uid()::text = (storage.foldername(name))[1]
+);
+
+create policy "Public read company assets"
+on storage.objects for select
+using (bucket_id = 'company-assets');

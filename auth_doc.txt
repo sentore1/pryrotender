@@ -1,0 +1,310 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-gb" lang="en-gb" dir="ltr" >
+	<head>
+		  <base href="https://developer.pesapal.com/how-to-integrate/e-commerce/api-30-json/authentication" />
+  <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Lazaro Ongele" />
+  <meta name="generator" content="Joomla! 1.7 - Open Source Content Management" />
+  <title>Authentication - Pesapal Developer Community</title>
+  <link href="/templates/pesapaldev/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
+  <link rel="stylesheet" href="/plugins/content/codehighlighter/syntaxhighlighter2/styles/shCore.css" type="text/css" />
+  <link rel="stylesheet" href="/plugins/content/codehighlighter/syntaxhighlighter2/styles/shThemeDefault.css" type="text/css" />
+  <script src="/media/system/js/core.js" type="text/javascript"></script>
+  <script src="/media/system/js/mootools-core.js" type="text/javascript"></script>
+  <script src="/media/system/js/caption.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shCore.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushAS3.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushBash.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushCpp.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushCSharp.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushCss.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushDelphi.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushDiff.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushGroovy.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushJava.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushJavaFX.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushJScript.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushPerl.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushPhp.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushPlain.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushPowerShell.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushPython.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushRuby.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushScala.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushSql.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushVb.js" type="text/javascript"></script>
+  <script src="/plugins/content/codehighlighter/syntaxhighlighter2/scripts/shBrushXml.js" type="text/javascript"></script>
+  <script type="text/javascript">
+
+		   SyntaxHighlighter.config.clipboardSwf = "/plugins/content/codehighlighter/syntaxhighlighter2/scripts/clipboard.swf";
+		   SyntaxHighlighter.all();
+		 
+  </script>
+
+        <meta charset="utf-8" />
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:300,400|Ubuntu:400" />    
+        <link rel="stylesheet" href="/templates/pesapaldev/assets/combined/dashboard.css" />
+        <link rel="stylesheet" href="/templates/pesapaldev/assets/css/template.css" />
+        <link rel="stylesheet" href="/templates/pesapaldev/assets/css/directory.css" />
+        <link rel="stylesheet" href="/templates/system/css/system.css" type="text/css" />
+		<script type="text/javascript">
+          (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+          m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+          })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+          ga('create', 'UA-11225305-8', 'auto');
+          ga('send', 'pageview');
+        </script>
+    </head>
+	<body class="solid fplain view-article sfx">
+    	<!--HEADER-->
+    <header class="solid">
+  	<div class="title-bar hide-for-medium" data-responsive-toggle="pp-menu">
+        <a href="https://developer.pesapal.com/"><img src="/templates/pesapaldev/assets/images/logo.png?v=1793207334" alt="Pesapal.com" /></a>
+        <button id="simple-menu">&nbsp;<i class="pe-7s-menu2"></i>&nbsp;</button>
+	</div>
+    <div class="top-bar" id="pp-menu">
+      <div id="sidr" class="top-bar-left">
+        <ul class="dropdown menu" data-dropdown-menu>
+          <li class="menu-text hide-for-small-only"><a href="https://developer.pesapal.com/" id="logo"><img src="/templates/pesapaldev/assets/images/logo.png?v=1793207334" alt="Pesapal.com" /></a></li>
+          <li class="country"><a href="#">Developer</a></li>
+          <li><a href="https://www.pesapal.com"><i class="pe-7s-home"></i></a></li>
+         </ul>
+      </div>
+      <div class="top-bar-right">
+        <ul class="menu">
+              <li class="sec">
+                <a href="https://www.pesapal.com/security" class="secimg s1"><span><img src="/templates/pesapaldev/assets/images/norton.png" alt="Noton" /></span></a>
+              </li>
+              <li class="sec">
+                <a href="https://www.pesapal.com/security" class="secimg s2"><span><img src="/templates/pesapaldev/assets/images/pcidss.png" alt="PCI/DSS Compliant" /></span></a>
+              </li>
+        </ul> 
+      </div>
+	</div>
+    </header>
+    <!--END HEADER-->   
+    
+    <!--BODY-->
+    <div class="pp-body dsh nobpadd">  
+        <div class="pp-dashboard collapse row expanded">  
+        
+        	<!--LEFT-->
+            <div class="column medium-4 large-2">
+            	<div class="dleft">
+                			<div class="moduletable">
+						 <a href="/login" id="login"></a>
+     <a href="/sign-up" id="signup"></a>
+
+		</div>
+	
+                	<div id="sidemenu">
+<ul class="menu vertical" id="sidemenu" data-accordion-menu>
+<li class="item-120"><a href="/forum" >Forum</a></li><li class="item-101"><a href="/" >Introduction</a></li><li class="item-214"><a href="/integration" >Integration</a></li><li class="item-179 active deeper parent"><a href="/how-to-integrate/e-commerce/api-20-xml/api-reference" >API</a><ul class="menu vertical nested"><li class="item-290 deeper parent"><a href="/how-to-integrate/point-of-sale/api-reference" >Point of sale (POS)</a><ul class="menu vertical nested"><li class="item-292"><a href="/how-to-integrate/point-of-sale/api-reference" >API Reference</a></li><li class="item-301"><a href="/how-to-integrate/point-of-sale/wireless-connection" >Wireless Connection</a></li><li class="item-291"><a href="/how-to-integrate/point-of-sale/pos-wired-connection" >Wired Connection</a></li></ul></li><li class="item-289 active deeper parent"><a href="/?Itemid=194" >E-commerce</a><ul class="menu vertical nested"><li class="item-285 active deeper parent"><a href="/how-to-integrate/e-commerce/api-30-json/api-reference" >API 3.0 - JSON</a><ul class="menu vertical nested"><li class="item-279"><a href="/how-to-integrate/e-commerce/api-30-json/api-reference" >API Reference</a></li><li class="item-280 current active"><a href="/how-to-integrate/e-commerce/api-30-json/authentication" >Authentication</a></li><li class="item-281"><a href="/how-to-integrate/e-commerce/api-30-json/registeripnurl" >RegisterIPNURL</a></li><li class="item-282"><a href="/how-to-integrate/e-commerce/api-30-json/getregisteredipn" >GetIPNList</a></li><li class="item-283"><a href="/how-to-integrate/e-commerce/api-30-json/submitorderrequest" >SubmitOrderRequest</a></li><li class="item-284"><a href="/how-to-integrate/e-commerce/api-30-json/gettransactionstatus" >GetTransactionStatus</a></li><li class="item-287"><a href="/how-to-integrate/e-commerce/api-30-json/recurringpayments" >RecurringPayments</a></li><li class="item-304"><a href="/how-to-integrate/e-commerce/api-30-json/refund-request" >RefundRequest</a></li><li class="item-305"><a href="/how-to-integrate/e-commerce/api-30-json/order-cancellation-api" >OrderCancellation</a></li><li class="item-306"><a href="/how-to-integrate/e-commerce/api-30-json/additional-api3-endpoints" >AdditionalEndpoints</a></li></ul></li><li class="item-286 deeper parent"><a href="/?Itemid=286" >API 2.0 - XML</a><ul class="menu vertical nested"><li class="item-216"><a href="/how-to-integrate/e-commerce/api-20-xml/samples-downloads" >Samples &amp; Downloads</a></li><li class="item-215"><a href="/how-to-integrate/e-commerce/api-20-xml/api-reference" >API Reference</a></li><li class="item-244"><a href="/how-to-integrate/e-commerce/api-20-xml/step-by-step" title="Integration steps" >Step By Step</a></li><li class="item-265"><a href="/how-to-integrate/e-commerce/api-20-xml/ipn" >IPN</a></li><li class="item-243"><a href="/how-to-integrate/e-commerce/api-20-xml/php-sample" >PHP Sample</a></li><li class="item-247"><a href="/how-to-integrate/e-commerce/api-20-xml/net-sample" >.Net Sample</a></li></ul></li></ul></li></ul></li><li class="item-264 deeper parent"><a href="/official-extensions" >Official Pesapal plugins</a><ul class="menu vertical nested"><li class="item-277"><a href="/official-extensions" >Download Plugins</a></li><li class="item-276"><a href="/official-extensions/documentation" >Documentation</a></li></ul></li></ul>
+</div>
+                </div>
+            </div>
+            <!--END LEFT-->
+            
+            <!--RIGHT -->
+            <div class="column medium-8 large-10">
+            	<div class="dright">
+                   
+<div id="breadcrumbs" class="pd-wrap pd-slim row ">
+	<div class="column large-11 medium-12">
+		        <a href="/" class="pathway">Home</a>  /  <a href="/how-to-integrate/e-commerce/api-20-xml/api-reference" class="pathway">API</a>  /  <a href="/?Itemid=194" class="pathway">E-commerce</a>  /  <a href="/how-to-integrate/e-commerce/api-30-json/api-reference" class="pathway">API 3.0 - JSON</a>  /  <span class="breadcrumbs_list">Authentication</span>	</div>
+</div>
+
+                    <div class="pd-wrap row last small-collapse large-uncollapse">
+                    	<div class="column large-11 medium-12">
+                        	<div class="column">
+                				
+<div id="system-message-container">
+</div>
+                                								<div class="item-page">
+
+
+
+
+
+
+	<h3>Authentication Endpoint - <small><code>Post Request</code></small></h3>
+<p>Pesapal's API Authentication requests are done via a POST request.</p>
+<p>Your Pesapal merchant <strong>consumer_key</strong> and <strong>consumer_secret</strong> will be used to generate an access token.</p>
+<p>This access token is valid for a maximum period of <strong>5 minutes.</strong> Use this token (sent as a Bearer Token) to access all other Pesapal API 3.0 endpoints.</p>
+<p>The URL to our token generation API is either:</p>
+<ul>
+<li><strong>Sandbox/Demo URL: </strong><a href="https://cybqa.pesapal.com/pesapalv3/api/Auth/RequestToken" target="_blank">https://cybqa.pesapal.com/pesapalv3/api/Auth/RequestToken</a></li>
+<li><strong>Production/Live URL: </strong><a href="https://pay.pesapal.com/v3/api/Auth/RequestToken" target="_blank">https://pay.pesapal.com/v3/api/Auth/RequestToken</a></li>
+</ul>
+<h4><span style="text-decoration: underline;">HTTP request headers</span></h4>
+<p><strong>Accept: </strong>The response format, which is required for operations with a response body.<br /> <strong>Content-Type: </strong>The request format, which is required for operations with a request body.</p>
+<table>
+<thead>
+<tr><th><span>Parameter </span></th><th><span>Required</span></th><th><span>Description</span></th></tr>
+</thead>
+<tbody>
+<tr>
+<td><span>Accept</span></td>
+<td><code><span>Required</span></code></td>
+<td><span> Should be set to </span><code><span>application/json</span></code></td>
+</tr>
+<tr>
+<td><span>Content-Type</span></td>
+<td><code><span>Required</span></code></td>
+<td><span> Should be set to </span><code><span>application/json</span></code></td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<h4><span style="text-decoration: underline;">Request Parameters</span></h4>
+<p>Your live/production <strong>consumer_key</strong> and <strong>consumer_secret</strong> will be sent to your merchant email on opening a business/merchant account.</p>
+<p>Please click <a href="https://www.pesapal.com/dashboard/account/register" target="_blank">here</a> to open a live/production business account.</p>
+
+
+
+
+<div class="callout warning">
+Click <a href="/api3-demo-keys.txt" target="_blank">here</a> to download test credentials to use while connecting to our <strong>demo/sandbox</strong> API.
+</div>
+
+
+
+
+<table>
+<thead>
+<tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer_key</td>
+<td>String</td>
+<td><code>Required</code></td>
+<td>The consumer_key parameter must be set to <code>merchant consumer_key</code></td>
+</tr>
+<tr>
+<td>consumer_secret</td>
+<td>String</td>
+<td><code>Required</code></td>
+<td>The consumer_secret parameter must be set to <code>merchant consumer_secret.</code></td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<h6>Sample Request</h6>
+<pre class="brush: xml">    {
+        "consumer_key": "xxxxx",
+        "consumer_secret": "xxxxxx"
+    }
+</pre>
+<p> </p>
+<h4><span style="text-decoration: underline;">Response Parameters</span></h4>
+<p> </p>
+<table>
+<thead>
+<tr><th><span>Name</span></th><th><span>Type</span></th><th><span>Description</span></th></tr>
+</thead>
+<tbody>
+<tr>
+<td><span>token</span></td>
+<td><span>String</span></td>
+<td><span>The access token string as issued by the server. The access token issued will have permission to invoke all Pesapa API operations.</span></td>
+</tr>
+<tr>
+<td><span>expiryDate</span></td>
+<td><span>String</span></td>
+<td><span>Date and time the token will expire. The access token usually expires after 5mins - </span><code><span>UTC</span></code></td>
+</tr>
+<tr>
+<td><span>error</span></td>
+<td><span>Object</span></td>
+<td><span>Error object</span></td>
+</tr>
+<tr>
+<td><span>status</span></td>
+<td><span>String</span></td>
+<td><span>Response code</span></td>
+</tr>
+<tr>
+<td><span>message</span></td>
+<td><span>String</span></td>
+<td><span>A brief description about the response received.</span></td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<h6>Sample Response</h6>
+<pre class="brush: xml">    {
+        "token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYa",
+        "expiryDate": "2021-08-26T12:29:30.5177702Z",
+        "error": null,
+        "status": "200",
+        "message": "Request processed successfully"
+    }    
+</pre>
+<div><a href="/how-to-integrate/e-commerce/api-30-json/api-reference" style="background-color: #5d0505; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 30px;">← Previous</a> <a href="/how-to-integrate/e-commerce/api-30-json/registeripnurl" style="background-color: #046f8f; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; float: right; border-radius: 30px;">Next →</a></div>
+	<div class="row bdtop pp-tools">
+	<div class="medium-6 column">
+        <div class="pp-like text-center">
+        <h5>Is this article helpful?</h5>
+           <!-- LikeBtn.com BEGIN -->
+                <span class="likebtn-wrapper" data-theme="padded" data-site_id="5994abf5943ec9486c914db8"></span>
+                <script>(function(d,e,s){if(d.getElementById("likebtn_wjs"))return;a=d.createElement(e);m=d.getElementsByTagName(e)[0];a.async=1;a.id="likebtn_wjs";a.src=s;m.parentNode.insertBefore(a, m)})(document,"script","//w.likebtn.com/js/w/widget.js");</script>
+            <!-- LikeBtn.com END -->
+        </div>
+    </div>
+    <div class="medium-6 column">
+        <div class="share text-center">
+        <h5>Share with Others</h5>
+                    <a target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fdeveloper.pesapal.com%2Fhow-to-integrate%2Fe-commerce%2Fapi-30-json%2Fauthentication"><i class="pe-7s-facebook"></i></a>
+    <a target="_blank" href="https://twitter.com/home?status=Authentication+https%3A%2F%2Fdeveloper.pesapal.com%2Fhow-to-integrate%2Fe-commerce%2Fapi-30-json%2Fauthentication @Pesapal"><i class="pe-7s-twitter"></i></a>
+    <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fdeveloper.pesapal.com%2Fhow-to-integrate%2Fe-commerce%2Fapi-30-json%2Fauthentication&title=Authentication&summary=&source=Pesapal"><i class="pe-7s-linkedin2"></i></a>
+    <a target="_blank" href="https://plus.google.com/share?url=https%3A%2F%2Fdeveloper.pesapal.com%2Fhow-to-integrate%2Fe-commerce%2Fapi-30-json%2Fauthentication" class="last"><i class="pe-7s-google-plus"></i></a>
+                                </div>
+    </div>
+ </div>
+</div>
+
+                            </div>
+                          </div>
+                     </div>
+                </div>
+            </div>
+            <!--END RIGHT-->
+            
+        </div>
+    </div>
+    <!--END BODY-->
+    
+    
+    
+
+<!--FOOTER-->
+    <footer>
+     <div class="pp-copyright short">
+        <div class="row">
+            <div class="column medium-12">
+                    <div class="foot-links">
+                        <li><a href="https://www.pesapal.com/help-support">Help &amp; Contact</a></li>
+                        <li><a href="https://www.pesapal.com/terms-and-conditions">Terms &amp; Conditions</a></li>
+                        <li><a href="https://www.pesapal.com/privacy-policy">Privacy Policy</a></li>
+                        <li><a href="https://www.pesapal.com/security">Security</a></li>
+                    </div>
+                    ©2009-2017 PesaPal™, all rights reserved
+            </div>
+        </div>
+    </div>
+     <!--END COPYRIGHT-->
+	</footer>
+<!--END FOOTER-->
+    
+     	<script src="/templates/pesapaldev/assets/combined/dashboard.js" type="text/javascript"></script>
+        <script src="/templates/pesapaldev/assets/js/jquery-ui.min.js" type="text/javascript"></script>
+        <script src="/templates/pesapaldev/assets/js/dash.js" type="text/javascript"></script>
+        <script src="/templates/pesapaldev/assets/js/easyResponsiveTabs.js" type="text/javascript"></script>	
+		
+	</body>
+</html>

@@ -8,7 +8,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [step, setStep] = useState<'details' | 'payment'>('details');
+  const reason = params.get('reason');
+  const [step, setStep] = useState<'details' | 'payment'>(reason === 'subscription' ? 'payment' : 'details');
   const [plan, setPlan] = useState<'monthly' | 'annual'>(params.get('plan') === 'annual' ? 'annual' : 'monthly');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +24,7 @@ function RegisterForm() {
     const { data, error: err } = await supabase.auth.signUp({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
     if (data.user) {
-      await supabase.from('profiles').update({ company_name: company }).eq('id', data.user.id);
+      await supabase.from('profiles').upsert({ id: data.user.id, email, company_name: company });
       setUserId(data.user.id);
       document.cookie = `sb-access-token=${data.session?.access_token}; path=/; max-age=3600`;
       setStep('payment');
@@ -34,10 +35,17 @@ function RegisterForm() {
   const handlePayment = async () => {
     setLoading(true); setError('');
     try {
+      // For existing logged-in users renewing, get their session
+      let resolvedUserId = userId;
+      let resolvedEmail = email;
+      if (!resolvedUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) { resolvedUserId = user.id; resolvedEmail = user.email || ''; }
+      }
       const res = await fetch('/api/pesapal/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, email, userId }),
+        body: JSON.stringify({ plan, email: resolvedEmail, userId: resolvedUserId }),
       });
       const data = await res.json();
       if (data.redirect_url) window.location.href = data.redirect_url;
@@ -54,6 +62,7 @@ function RegisterForm() {
           <h1 className="text-xl font-bold text-gray-900 mt-4">Choose your plan</h1>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          {reason === 'subscription' && <div className="px-3 py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-sm">You need an active subscription to access the platform.</div>}
           {error && <div className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
             {(['monthly', 'annual'] as const).map(p => (
@@ -69,9 +78,7 @@ function RegisterForm() {
             className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
             {loading ? 'Redirecting...' : `Pay with Pesapal`}
           </button>
-          <button onClick={() => router.push('/dashboard')} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">
-            Skip for now (limited access)
-          </button>
+
         </div>
       </div>
     </div>

@@ -12,28 +12,13 @@ const SAMPLE_TENDERS = [
 ];
 
 const CAT_COLORS: Record<string, string> = {
-  IT: 'bg-blue-100 text-blue-700',
-  Construction: 'bg-orange-100 text-orange-700',
-  Medical: 'bg-red-100 text-red-700',
-  Consultancy: 'bg-purple-100 text-purple-700',
-  Goods: 'bg-green-100 text-green-700',
-  Services: 'bg-yellow-100 text-yellow-700',
+  IT: 'bg-blue-600 text-white',
+  Construction: 'bg-orange-500 text-white',
+  Medical: 'bg-red-600 text-white',
+  Consultancy: 'bg-purple-600 text-white',
+  Goods: 'bg-green-600 text-white',
+  Services: 'bg-yellow-500 text-white',
 };
-
-const WORKFLOW_STEPS = [
-  { color: 'bg-red-500', label: 'Tender published', sub: 'New government procurement posted', time: '09:41 AM', done: true },
-  { color: 'bg-blue-500', label: 'AI analyzing tender', sub: 'Extracting requirements & scope', time: '09:41 AM', done: true },
-  { color: 'bg-green-500', label: 'Proposal generated', sub: 'Technical & financial sections drafted', time: '09:42 AM', done: true },
-  { color: 'bg-purple-500', label: 'Notification sent', sub: 'Email alert dispatched to your inbox', time: '09:42 AM', done: true },
-  { color: 'bg-orange-400', label: 'Document exported', sub: 'Word file ready for submission', time: '09:42 AM', done: false },
-];
-
-const CHAT_MSGS = [
-  { from: 'user', text: 'A new ICT tender has been posted by Ministry of Education.' },
-  { from: 'ai', text: "I've analyzed the requirements. It covers supply of 500 laptops and networking equipment." },
-  { from: 'ai', text: 'Generating a full technical & financial proposal now...' },
-  { from: 'ai', text: 'Proposal ready. Deadline is Aug 15 — 3 weeks away. Download your Word document.' },
-];
 
 export default function LandingPage() {
   return (
@@ -41,7 +26,7 @@ export default function LandingPage() {
 
       {/* Nav */}
       <nav className="bg-[#f5f5f5] px-8 py-5 flex items-center justify-between max-w-6xl mx-auto">
-        <Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain" priority />
+        <Image src="/logo.png" alt="PryroTender" width={130} height={40} style={{ height: 'auto' }} className="object-contain" priority />
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
           <a href="#features" className="hover:text-gray-900 transition">Features</a>
           <a href="#pricing" className="hover:text-gray-900 transition">Pricing</a>
@@ -57,12 +42,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-6 pt-14 pb-0 text-center">
         {/* Social proof badge */}
-        <div className="inline-flex items-center gap-2.5 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm mb-8">
-          <div className="flex -space-x-1.5">
-            {['RW','CO','BU','MD'].map((e, i) => (
-              <span key={i} className="w-6 h-6 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-xs font-bold text-blue-600">{e}</span>
-            ))}
-          </div>
+        <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm mb-8">
           <span className="text-sm text-gray-600 font-medium">Trusted by 200+ Rwanda companies</span>
         </div>
 
@@ -81,11 +61,11 @@ export default function LandingPage() {
         {/* CTAs */}
         <div className="flex items-center justify-center gap-3 mb-16">
           <Link href="/register"
-            className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-full hover:bg-gray-700 transition text-sm shadow-sm">
+            className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700 transition text-sm shadow-sm">
             Start for Free
           </Link>
           <Link href="#pricing"
-            className="px-6 py-3 bg-white text-gray-700 font-semibold rounded-full border border-gray-200 hover:bg-gray-50 transition text-sm shadow-sm">
+            className="px-6 py-3 bg-white text-gray-700 font-semibold rounded-lg border border-gray-200 hover:bg-gray-50 transition text-sm shadow-sm">
             View Pricing
           </Link>
         </div>
@@ -97,77 +77,88 @@ export default function LandingPage() {
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
 
         <div className="relative z-10 flex items-start justify-center gap-4 px-6 pt-12 pb-0 max-w-5xl mx-auto">
-          {/* Left card — Workflow */}
-          <div className="bg-white rounded-[4px] shadow-2xl w-80 shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <div className="w-8 h-8 bg-gray-100 rounded-[4px] flex items-center justify-center shrink-0">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          {/* Left — stacked tender cards */}
+          <div className="w-96 shrink-0 space-y-2" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
+            {/* Card 1 — selected */}
+            <div className="bg-white rounded-lg shadow-lg px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-700 text-white">Tender</span></div>
+                  <p className="text-sm font-semibold text-gray-800 leading-snug">Tender Notice for Supply of Three (3) Interactive Smart Screen to BRD</p>
+                </div>
+                <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold">Generate</span>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-800" style={{fontFamily:'Inter,system-ui,sans-serif'}}>New Tender Detected</p>
-                <p className="text-xs text-gray-400" style={{fontFamily:'Inter,system-ui,sans-serif'}}>Ref #TND-2025-0847 · 2 min ago</p>
+              <div className="mt-2.5 flex items-center justify-between">
+                <span className="text-xs text-gray-400">29-10-2026</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-violet-600 text-white">Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-pink-600 text-white">BRD</span>
+                </div>
               </div>
             </div>
-            <div className="px-5 py-4">
-              <p className="text-xs font-bold tracking-widest text-gray-400 uppercase mb-3">Workflow Progress</p>
-              <div className="space-y-3">
-                {WORKFLOW_STEPS.map((step, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className={`mt-0.5 w-2.5 h-2.5 rounded-full shrink-0 ${step.color}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-gray-700">{step.label}</p>
-                        <span className="text-xs text-gray-400 shrink-0 ml-2">{step.time} {step.done && '✓'}</span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{step.sub}</p>
-                    </div>
-                  </div>
-                ))}
+            {/* Card 2 */}
+            <div className="bg-white rounded-lg shadow-sm px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-700 text-white">Tender</span></div>
+                  <p className="text-sm font-semibold text-gray-800 leading-snug">Tender Notice for Supply of Audio-Visual Equipment</p>
+                </div>
+                <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold">Generate</span>
               </div>
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
-                <span className="text-blue-600 text-sm">✓</span>
-                <span className="text-sm font-semibold text-blue-600">Proposal completed</span>
-                <span className="ml-auto text-xs text-gray-400">09:42 AM</span>
+              <div className="mt-2.5 flex items-center justify-between">
+                <span className="text-xs text-gray-400">09-11-2026</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-violet-600 text-white">Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-pink-600 text-white">Irembo Ltd</span>
+                </div>
+              </div>
+            </div>
+            {/* Card 3 */}
+            <div className="bg-white rounded-lg shadow-sm px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-700 text-white">Tender</span></div>
+                  <p className="text-sm font-semibold text-gray-800 leading-snug">Request for Proposals – Framework Supply of IT Infrastructure</p>
+                </div>
+                <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold">Generate</span>
+              </div>
+              <div className="mt-2.5 flex items-center justify-between">
+                <span className="text-xs text-gray-400">09-11-2026</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-violet-600 text-white">Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-pink-600 text-white">Irembo Ltd</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right card — AI Chat */}
-          <div className="bg-white rounded-[4px] shadow-2xl w-80 shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-[4px] flex items-center justify-center shrink-0">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">AI Agent</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400">PryroTender AI</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-1">
-                {[0,1,2].map(i => <span key={i} className="w-1 h-1 rounded-full bg-gray-300 inline-block" />)}
-              </div>
+          {/* Right — Generated Proposal panel */}
+          <div className="bg-white rounded-lg shadow-2xl w-[480px] shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-800">Generated Proposal</h2>
+              <span className="text-gray-300 text-base">✕</span>
             </div>
-            <div className="px-4 py-4 space-y-3 min-h-64">
-              {CHAT_MSGS.map((msg, i) => (
-                <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                  {msg.from === 'ai' && (
-                    <div className="w-6 h-6 rounded-[4px] bg-blue-600 flex items-center justify-center shrink-0">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                    </div>
-                  )}
-                  <div className={`max-w-[85%] px-3 py-2 rounded-[4px] text-xs leading-relaxed ${msg.from === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                    {msg.text}
-                  </div>
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-gray-800 mb-3">Tender Notice for Supply of Three (3) Interactive Smart Screen to BRD Head Office</p>
+              <div className="border border-gray-200 rounded-md p-3 space-y-2">
+                <p className="text-xs font-bold text-gray-900">TECHNICAL AND FINANCIAL PROPOSAL</p>
+                <div className="space-y-1 text-xs text-gray-700">
+                  <p><span className="font-semibold">Tender Reference:</span> Tender Notice for Supply of Three (3) Interactive Smart Screen to BRD Head Office</p>
+                  <p><span className="font-semibold">Proposal Reference:</span> REF-2026-001</p>
+                  <p><span className="font-semibold">Submission Date:</span> 28 October 2026</p>
+                  <p><span className="font-semibold">Submitted By:</span> [Your Organization Name]</p>
+                  <p><span className="font-semibold">Address:</span> [Street Address, Kigali, Rwanda]</p>
+                  <p><span className="font-semibold">Telephone:</span> [+250 XXX XXX XXX]</p>
+                  <p><span className="font-semibold">Email:</span> [company@email.com]</p>
+                  <p><span className="font-semibold">Website:</span> [www.yourcompany.rw]</p>
                 </div>
-              ))}
-            </div>
-            <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
-              <input readOnly value="Ask anything or type a command..." className="flex-1 text-xs text-gray-400 bg-transparent outline-none cursor-default" />
-              <button className="w-7 h-7 bg-blue-600 rounded-[4px] flex items-center justify-center text-white text-xs shrink-0">→</button>
+                <p className="text-xs font-bold text-gray-900 pt-1">1. EXECUTIVE SUMMARY</p>
+                <p className="text-xs text-gray-600">We are pleased to submit this comprehensive proposal in response to the tender...</p>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button className="flex-1 py-2 bg-gray-100 text-gray-700 text-xs font-semibold rounded-md">Copy</button>
+                <button className="flex-1 py-2 bg-blue-600 text-white text-xs font-semibold rounded-md">Download DOCX</button>
+              </div>
             </div>
           </div>
         </div>
@@ -195,12 +186,14 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-2 gap-4">
             {SAMPLE_TENDERS.map(t => (
               <div key={t.id} className="border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition relative overflow-hidden group">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CAT_COLORS[t.cat] || 'bg-gray-100 text-gray-600'}`}>{t.cat}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CAT_COLORS[t.cat] || 'bg-gray-100 text-gray-600'}`}>{t.cat}</span>
+                    <span className="text-xs font-semibold text-gray-900">{t.org}</span>
+                  </div>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${t.source === 'Umucyo Gov' ? 'bg-emerald-600 text-white' : 'bg-violet-600 text-white'}`}>{t.source}</span>
                 </div>
                 <p className="text-sm font-semibold text-gray-800 leading-snug mb-1">{t.title}</p>
-                <p className="text-xs text-pink-600 font-medium mb-2">{t.org}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">Deadline: {t.deadline}</span>
                   <Link href="/register" className="text-xs font-semibold text-blue-600 hover:underline">Generate Proposal →</Link>
@@ -254,7 +247,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-8 text-center text-xs text-gray-400">
-        <p>© {new Date().getFullYear()} PryroTender. All rights reserved.</p>
+        <p suppressHydrationWarning>© {new Date().getFullYear()} PryroTender. All rights reserved.</p>
         <p className="mt-1">Contact: <a href="mailto:abdousentore@gmail.com" className="hover:text-gray-600">abdousentore@gmail.com</a></p>
       </footer>
     </div>

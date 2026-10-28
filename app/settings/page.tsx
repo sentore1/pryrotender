@@ -7,12 +7,35 @@ import Link from 'next/link';
 
 const CATEGORIES = ['IT & Technology', 'Construction', 'Medical', 'Consultancy', 'Goods & Supply', 'Services'];
 
+const ALL_NAV_CATS: { label: string; cat: string }[] = [
+  { label: 'IT & Technology', cat: 'IT Technology Software' },
+  { label: 'Construction', cat: 'Construction Infrastructure Building' },
+  { label: 'Medical', cat: 'Medical Healthcare Hospital' },
+  { label: 'Consultancy', cat: 'Consultancy Consulting Services' },
+  { label: 'Goods & Supply', cat: 'Goods Supply Equipment' },
+  { label: 'Services', cat: 'Services' },
+  { label: 'Agriculture', cat: 'Agriculture Farming' },
+  { label: 'Energy', cat: 'Energy Power' },
+  { label: 'Transport', cat: 'Transport Logistics' },
+  { label: 'Education', cat: 'Education Training' },
+  { label: 'Water & Sanitation', cat: 'Water Sanitation' },
+  { label: 'Finance', cat: 'Finance Banking' },
+  { label: 'Security', cat: 'Security Defense' },
+  { label: 'Environment', cat: 'Environment Climate' },
+  { label: 'Tourism', cat: 'Tourism Hospitality' },
+];
+
+type SidebarItem = { label: string; cat: string };
+
 export default function SettingsPage() {
   const router = useRouter();
   const [userId, setUserId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<'company' | 'notifications' | 'subscription'>('company');
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'subscription'>('company');
+  const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [company, setCompany] = useState({ company_name: '', company_address: '', company_phone: '', company_website: '', company_ref_prefix: '' });
   const [logoUrl, setLogoUrl] = useState('');
@@ -20,28 +43,45 @@ export default function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [sigFile, setSigFile] = useState<File | null>(null);
 
-  const [notif, setNotif] = useState({ enabled: false, frequency: 'daily', keywords: [] as string[], categories: [] as string[] });
+  const [notif, setNotif] = useState({ enabled: false, frequency: 'daily', keywords: [] as string[], categories: [] as string[], notification_email: '', extra_emails: [] as string[] });
   const [kwInput, setKwInput] = useState('');
+  const [extraEmailInput, setExtraEmailInput] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
   const [profile, setProfile] = useState<any>(null);
+  const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>(ALL_NAV_CATS.slice(0, 5));
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.push('/login'); return; }
-      setUserId(data.user.id);
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+    const loadData = async (uid: string) => {
+      const { data: p } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (p) {
         setProfile(p);
         setCompany({ company_name: p.company_name || '', company_address: p.company_address || '', company_phone: p.company_phone || '', company_website: p.company_website || '', company_ref_prefix: p.company_ref_prefix || '' });
         setLogoUrl(p.logo_url || '');
         setSigUrl(p.signature_url || '');
+        if (p.sidebar_categories?.length) {
+          setSidebarItems(p.sidebar_categories.map((cat: string) => ALL_NAV_CATS.find(n => n.cat === cat) || { label: cat, cat }));
+        }
       }
-      const { data: n } = await supabase.from('notification_preferences').select('*').eq('user_id', data.user.id).single();
-      if (n) setNotif({ enabled: n.enabled, frequency: n.frequency, keywords: n.keywords || [], categories: n.categories || [] });
+      const { data: n } = await supabase.from('notification_preferences').select('*').eq('user_id', uid).single();
+      if (n) setNotif({ enabled: n.enabled, frequency: n.frequency, keywords: n.keywords || [], categories: n.categories || [], notification_email: n.notification_email || '', extra_emails: n.extra_emails || [] });
+      setLoading(false);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        if (!session) { router.push('/login'); return; }
+        setUserId(session.user.id);
+        loadData(session.user.id);
+      }
     });
+    return () => subscription.unsubscribe();
   }, []);
 
   const uploadFile = async (file: File, path: string) => {
-    const { data, error } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true });
     if (error) throw error;
     const { data: url } = supabase.storage.from('company-assets').getPublicUrl(path);
     return url.publicUrl;
@@ -50,14 +90,16 @@ export default function SettingsPage() {
   const saveCompany = async () => {
     setSaving(true);
     try {
-      let logo = logoUrl;
-      let sig = sigUrl;
+      let logo = logoUrl, sig = sigUrl;
       if (logoFile) logo = await uploadFile(logoFile, `${userId}/logo`);
       if (sigFile) sig = await uploadFile(sigFile, `${userId}/signature`);
-      await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig }).eq('id', userId);
-      setLogoUrl(logo); setSigUrl(sig);
+      const { error } = await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig }).eq('id', userId);
+      if (error) throw error;
+      setLogoUrl(logo); setSigUrl(sig); setLogoFile(null); setSigFile(null);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message?.includes('Bucket') ? 'Storage bucket not found.' : e.message);
+    }
     setSaving(false);
   };
 
@@ -77,22 +119,71 @@ export default function SettingsPage() {
     setNotif(n => ({ ...n, categories: n.categories.includes(cat) ? n.categories.filter(c => c !== cat) : [...n.categories, cat] }));
   };
 
+  const addExtraEmail = () => {
+    const e = extraEmailInput.trim();
+    if (e && e.includes('@') && !notif.extra_emails.includes(e)) {
+      setNotif(n => ({ ...n, extra_emails: [...n.extra_emails, e] }));
+      setExtraEmailInput('');
+    }
+  };
+
+  const sendTestNotification = async () => {
+    setTesting(true); setTestResult('');
+    try {
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.NEXT_PUBLIC_CRON_SECRET || '' },
+        body: JSON.stringify({ test: true, userId }),
+      });
+      const data = await res.json();
+      setTestResult(data.sent > 0 || data.success ? '✓ Test email sent!' : 'No matching tenders found.');
+    } catch { setTestResult('Failed to send test.'); }
+    setTesting(false);
+    setTimeout(() => setTestResult(''), 4000);
+  };
+
+  const saveSidebar = async () => {
+    setSaving(true);
+    await supabase.from('profiles').update({ sidebar_categories: sidebarItems.map(i => i.cat) }).eq('id', userId);
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    setSaving(false);
+  };
+
+  const addToSidebar = (item: SidebarItem) => {
+    if (!sidebarItems.find(i => i.cat === item.cat)) setSidebarItems(prev => [...prev, item]);
+    setSidebarSearch('');
+  };
+
+  const removeFromSidebar = (cat: string) => setSidebarItems(prev => prev.filter(i => i.cat !== cat));
+
+  const moveItem = (idx: number, dir: -1 | 1) => {
+    setSidebarItems(prev => {
+      const arr = [...prev];
+      const swap = idx + dir;
+      if (swap < 0 || swap >= arr.length) return arr;
+      [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+      return arr;
+    });
+  };
+
+  const updateLabel = (idx: number, label: string) => {
+    setSidebarItems(prev => prev.map((item, i) => i === idx ? { ...item, label } : item));
+  };
+
+  if (loading) return <div className="min-h-screen bg-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" /></div>;
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <nav className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Image src="/logo.png" alt="PryroTender" width={110} height={36} className="object-contain" />
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-800">← Back to Dashboard</Link>
-        </div>
+        <Image src="/logo.png" alt="PryroTender" width={110} height={36} className="object-contain" />
+        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-800">← Back to Dashboard</Link>
       </nav>
 
       <div className="max-w-2xl mx-auto px-6 py-8">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="flex gap-2 mb-6">
-          {(['company', 'notifications', 'subscription'] as const).map(t => (
+          {(['company', 'notifications', 'sidebar', 'subscription'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
               {t}
@@ -187,12 +278,104 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Notification Email</label>
+                  <p className="text-xs text-gray-400 mb-2">Override the default account email for notifications.</p>
+                  <input type="email" value={notif.notification_email} onChange={e => setNotif(n => ({ ...n, notification_email: e.target.value }))}
+                    placeholder="e.g. alerts@yourcompany.com"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Additional Emails</label>
+                  <p className="text-xs text-gray-400 mb-2">Also send notifications to these emails.</p>
+                  <div className="flex gap-2 mb-2">
+                    <input type="email" value={extraEmailInput} onChange={e => setExtraEmailInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addExtraEmail()}
+                      placeholder="e.g. manager@company.com"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button onClick={addExtraEmail} className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Add</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {notif.extra_emails.map(email => (
+                      <span key={email} className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                        {email}
+                        <button onClick={() => setNotif(n => ({ ...n, extra_emails: n.extra_emails.filter(e => e !== email) }))} className="text-gray-400 hover:text-red-600">×</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
 
-            <button onClick={saveNotifications} disabled={saving}
+            <div className="flex gap-2">
+              <button onClick={saveNotifications} disabled={saving}
+                className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
+                {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save'}
+              </button>
+              <button onClick={sendTestNotification} disabled={testing || !notif.enabled}
+                title={!notif.enabled ? 'Enable notifications first' : ''}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition text-sm">
+                {testing ? 'Sending...' : 'Send Test Email'}
+              </button>
+            </div>
+            {testResult && <p className={`text-xs text-center font-medium ${testResult.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{testResult}</p>}
+          </div>
+        )}
+
+        {tab === 'sidebar' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+            <h2 className="font-semibold text-gray-800">Sidebar Categories</h2>
+            <p className="text-xs text-gray-400">Search to add categories, edit labels, reorder or remove them.</p>
+            <div className="relative">
+              <input type="text" value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)}
+                placeholder="Search categories to add..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {sidebarSearch && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  {ALL_NAV_CATS.filter(c =>
+                    c.label.toLowerCase().includes(sidebarSearch.toLowerCase()) &&
+                    !sidebarItems.find(i => i.cat === c.cat)
+                  ).map(item => (
+                    <button key={item.cat} onClick={() => addToSidebar(item)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">
+                      + {item.label}
+                    </button>
+                  ))}
+                  {!ALL_NAV_CATS.find(c => c.label.toLowerCase() === sidebarSearch.toLowerCase()) && (
+                    <button onClick={() => addToSidebar({ label: sidebarSearch, cat: sidebarSearch })}
+                      className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50">
+                      + Add &quot;{sidebarSearch}&quot; as custom
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              {sidebarItems.map((item, idx) => (
+                <div key={item.cat} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                  <div className="flex flex-col gap-0.5">
+                    <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-gray-700 disabled:opacity-20 text-xs leading-none">▲</button>
+                    <button onClick={() => moveItem(idx, 1)} disabled={idx === sidebarItems.length - 1} className="text-gray-400 hover:text-gray-700 disabled:opacity-20 text-xs leading-none">▼</button>
+                  </div>
+                  {editingIdx === idx ? (
+                    <input autoFocus value={item.label}
+                      onChange={e => updateLabel(idx, e.target.value)}
+                      onBlur={() => setEditingIdx(null)}
+                      onKeyDown={e => e.key === 'Enter' && setEditingIdx(null)}
+                      className="flex-1 px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none" />
+                  ) : (
+                    <span className="flex-1 text-sm text-gray-700">{item.label}</span>
+                  )}
+                  <button onClick={() => setEditingIdx(editingIdx === idx ? null : idx)} className="text-xs text-gray-400 hover:text-blue-600 px-1">✎</button>
+                  <button onClick={() => removeFromSidebar(item.cat)} className="text-xs text-gray-400 hover:text-red-600 px-1">✕</button>
+                </div>
+              ))}
+              {sidebarItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">No categories added yet.</p>}
+            </div>
+            <button onClick={saveSidebar} disabled={saving}
               className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
-              {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Notification Settings'}
+              {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Sidebar'}
             </button>
           </div>
         )}
@@ -213,8 +396,37 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-500">Renews / Expires: <span className="font-medium text-gray-700">{profile.subscription_end}</span></p>
             )}
             <Link href="/register?plan=monthly" className="block text-center py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm">
-              {profile?.subscription_status === 'active' ? 'Change Plan' : 'Subscribe Now'}
+              {profile?.subscription_status === 'active' ? 'Renew / Change Plan' : 'Subscribe Now'}
             </Link>
+            {profile?.subscription_status === 'active' && (
+              <button disabled={cancelling} onClick={async () => {
+                if (!confirm('Cancel your subscription? You will lose access at end of today.')) return;
+                setCancelling(true);
+                const res = await fetch('/api/subscription/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+                const data = await res.json();
+                if (data.success) { setProfile((p: any) => ({ ...p, subscription_status: 'inactive' })); }
+                setCancelling(false);
+              }} className="w-full py-2.5 bg-orange-50 text-orange-600 font-semibold rounded-lg hover:bg-orange-100 disabled:opacity-50 transition text-sm border border-orange-200">
+                {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
+              </button>
+            )}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs text-gray-400 mb-3">Danger Zone</p>
+              <button disabled={deleting} onClick={async () => {
+                if (!confirm('Permanently delete your account? This cannot be undone.')) return;
+                if (!confirm('Are you sure? All your data will be deleted.')) return;
+                setDeleting(true);
+                const res = await fetch('/api/account/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+                const data = await res.json();
+                if (data.success) {
+                  await supabase.auth.signOut();
+                  router.replace('/login');
+                }
+                setDeleting(false);
+              }} className="w-full py-2.5 bg-red-50 text-red-600 font-semibold rounded-lg hover:bg-red-100 disabled:opacity-50 transition text-sm border border-red-200">
+                {deleting ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
           </div>
         )}
       </div>

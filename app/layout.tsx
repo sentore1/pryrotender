@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'PryroTender – Rwanda Tenders & AI Proposals',
   description: 'Find Rwanda government and private tenders. Generate winning proposals with AI.',
+  icons: { icon: '/tablogo.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -18,7 +18,7 @@ export default function LoginPage() {
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
     // Store token in cookie for middleware
-    document.cookie = `sb-access-token=${data.session?.access_token}; path=/; max-age=3600`;
+    document.cookie = `sb-access-token=${data.session?.access_token}; path=/; max-age=604800`;
     // Check role
     const { data: profile } = await supabase.from('profiles').select('role, subscription_status').eq('id', data.user!.id).single();
     if (profile?.role === 'admin') router.push('/admin');
@@ -42,7 +42,15 @@ export default function LoginPage() {
               placeholder="you@company.com" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">Password</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-600">Password</label>
+              <button type="button" onClick={async () => {
+                if (!email) { setError('Enter your email first'); return; }
+                await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` });
+                setError('');
+                alert('Password reset email sent!');
+              }} className="text-xs text-blue-600 hover:underline">Forgot password?</button>
+            </div>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
               className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="••••••••" />
