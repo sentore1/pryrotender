@@ -87,31 +87,33 @@ async function downloadDocx(markdown: string, title: string) {
 }
 
 // ── Markdown → React renderer ─────────────────────────────────────────────────
+function cleanLine(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/, '')           // remove # headings
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // remove **bold**
+    .replace(/\*([^*]+)\*/g, '$1')       // remove *italic*
+    .replace(/^-{3,}$/, '')              // remove --- lines
+    // eslint-disable-next-line no-misleading-character-class
+    .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '') // remove emojis
+    .trim();
+}
+
 function ProposalRenderer({ content }: { content: string }) {
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let i = 0;
   let k = 0;
 
-  const renderInline = (text: string, key: string) => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return <span key={key}>{parts.map((p, j) =>
-      p.startsWith('**') && p.endsWith('**')
-        ? <strong key={j}>{p.slice(2, -2)}</strong>
-        : <span key={j}>{p}</span>
-    )}</span>;
-  };
-
   while (i < lines.length) {
-    const line = lines[i];
+    const raw = lines[i];
 
     // Table
-    if (line.trim().startsWith('|') && lines[i + 1]?.trim().startsWith('|---')) {
-      const headers = line.trim().split('|').filter(Boolean).map(s => s.trim());
+    if (raw.trim().startsWith('|') && lines[i + 1]?.trim().startsWith('|---')) {
+      const headers = raw.trim().split('|').filter(Boolean).map(s => cleanLine(s));
       const rows: string[][] = [];
       i += 2;
       while (i < lines.length && lines[i].trim().startsWith('|')) {
-        rows.push(lines[i].trim().split('|').filter(Boolean).map(s => s.trim()));
+        rows.push(lines[i].trim().split('|').filter(Boolean).map(s => cleanLine(s)));
         i++;
       }
       elements.push(
@@ -133,20 +135,14 @@ function ProposalRenderer({ content }: { content: string }) {
       continue;
     }
 
-    if (line.startsWith('## ')) {
-      elements.push(<h2 key={k++} className="text-base font-bold text-gray-900 mt-5 mb-2">{line.slice(3)}</h2>);
-    } else if (line.startsWith('### ')) {
-      elements.push(<h3 key={k++} className="text-sm font-bold text-gray-800 mt-3 mb-1">{line.slice(4)}</h3>);
-    } else if (line.startsWith('# ')) {
-      elements.push(<h1 key={k++} className="text-lg font-bold text-gray-900 mt-4 mb-2">{line.slice(2)}</h1>);
-    } else if (line.trim() === '---') {
-      elements.push(<div key={k++} className="my-2" />);
-    } else if (line.trim().startsWith('- ')) {
-      elements.push(<li key={k++} className="ml-4 text-gray-700 list-disc">{renderInline(line.trim().slice(2), `li-${k}`)}</li>);
-    } else if (line.trim() === '') {
+    const line = cleanLine(raw);
+
+    if (raw.trim() === '---' || line === '') {
       elements.push(<div key={k++} className="h-1" />);
+    } else if (raw.trim().startsWith('- ')) {
+      elements.push(<li key={k++} className="ml-4 text-gray-700 list-disc">{cleanLine(raw.trim().slice(2))}</li>);
     } else {
-      elements.push(<p key={k++} className="text-gray-700 leading-relaxed">{renderInline(line, `p-${k}`)}</p>);
+      elements.push(<p key={k++} className="text-gray-700 leading-relaxed">{line}</p>);
     }
     i++;
   }
@@ -208,6 +204,10 @@ function DashboardContent() {
   const [chatLoading, setChatLoading] = useState(false);
   const [panelWidth, setPanelWidth] = useState(640);
   const [paymentStatus, setPaymentStatus] = useState<'success' | 'failed' | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [customGenerating, setCustomGenerating] = useState(false);
+  const [customProposal, setCustomProposal] = useState('');
   const isResizing = useRef(false);
 
   const startResize = (e: React.MouseEvent) => {
@@ -224,6 +224,10 @@ function DashboardContent() {
       setPaymentStatus(p as 'success' | 'failed');
       setTimeout(() => setPaymentStatus(null), 6000);
       window.history.replaceState({}, '', '/dashboard');
+    }
+    if (params.get('custom') === '1') {
+      setCustomMode(true);
+      return;
     }
     fetchTenders(params.get('category') || '');
   }, []);
@@ -258,11 +262,76 @@ function DashboardContent() {
       const res = await fetch('/api/adjust-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proposal, instruction: chatInput }) });
       const data = await res.json();
       if (data.success) { setProposal(data.proposal); setChatInput(''); }
-    } catch {} finally { setChatLoading(false); }
+      else setError(data.error || 'Failed to update proposal.');
+    } catch { setError('Network error. Please try again.'); }
+    finally { setChatLoading(false); }
+  };
+
+  const generateCustomProposal = async () => {
+    if (!customText.trim()) return;
+    setCustomGenerating(true); setCustomProposal(''); setError('');
+    try {
+      const res = await fetch('/api/generate-proposal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenderDetails: customText, requirements: customText }),
+      });
+      const data = await res.json();
+      if (data.success) setCustomProposal(data.proposal); else setError(data.error || 'Failed.');
+    } catch { setError('Error generating proposal.'); } finally { setCustomGenerating(false); }
   };
 
   const open = tenders.filter(t => !t.deadline?.toLowerCase().includes('closed'));
   const closed = tenders.filter(t => t.deadline?.toLowerCase().includes('closed'));
+
+  if (customMode) return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <header className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-4 shrink-0">
+        <button onClick={() => { setCustomMode(false); setCustomProposal(''); setCustomText(''); window.history.replaceState({}, '', '/dashboard'); fetchTenders(''); }}
+          className="text-gray-500 hover:text-gray-800 text-sm font-medium flex items-center gap-1">← Back</button>
+        <h1 className="text-sm font-bold text-gray-800">Custom Proposal Generator</h1>
+      </header>
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col md:flex-row gap-6">
+        <div className="flex-1 flex flex-col gap-4">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Paste or type your tender details</label>
+          <textarea value={customText} onChange={e => setCustomText(e.target.value)}
+            placeholder="Paste the full tender description, requirements, scope of work, deadlines, etc..."
+            className="flex-1 min-h-64 w-full p-4 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          <button onClick={generateCustomProposal} disabled={customGenerating || !customText.trim()}
+            className="py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {customGenerating ? 'Generating...' : 'Generate Proposal'}
+          </button>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+        {(customGenerating || customProposal) && (
+          <div className="flex-1 flex flex-col gap-4">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Generated Proposal</label>
+            {customGenerating
+              ? <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" /></div>
+              : (
+                <div className="flex flex-col gap-3">
+                  <div className="border border-gray-200 rounded-xl p-4 text-sm text-gray-700 overflow-y-auto max-h-[60vh]">
+                    <ProposalRenderer content={customProposal} />
+                  </div>
+                  <div className="flex gap-2 p-2 border border-gray-200 rounded-lg">
+                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { if (!chatInput.trim() || !customProposal) return; setChatLoading(true); fetch('/api/adjust-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proposal: customProposal, instruction: chatInput }) }).then(r => r.json()).then(d => { if (d.success) { setCustomProposal(d.proposal); setChatInput(''); } }).finally(() => setChatLoading(false)); } }}
+                      placeholder="Refine proposal..." disabled={chatLoading}
+                      className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button disabled={chatLoading || !chatInput.trim()} onClick={() => { if (!chatInput.trim() || !customProposal) return; setChatLoading(true); fetch('/api/adjust-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proposal: customProposal, instruction: chatInput }) }).then(r => r.json()).then(d => { if (d.success) { setCustomProposal(d.proposal); setChatInput(''); } }).finally(() => setChatLoading(false)); }}
+                      className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">{chatLoading ? '...' : 'Send'}</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => navigator.clipboard.writeText(customProposal)} className="flex-1 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200">Copy</button>
+                    <button onClick={() => downloadDocx(customProposal, 'Custom_Proposal')} className="flex-1 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Download DOCX</button>
+                  </div>
+                </div>
+              )
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

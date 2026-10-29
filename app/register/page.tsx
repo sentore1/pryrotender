@@ -11,6 +11,11 @@ function RegisterForm() {
   const reason = params.get('reason');
   const [step, setStep] = useState<'details' | 'payment'>(reason === 'subscription' ? 'payment' : 'details');
   const [plan, setPlan] = useState<'monthly' | 'annual'>(params.get('plan') === 'annual' ? 'annual' : 'monthly');
+  const currency = (params.get('currency') || 'RWF') as 'RWF' | 'USDT';
+  const planPrices = {
+    RWF: { monthly: '100 RWF', annual: '100 RWF', monthlySub: '/month', annualSub: '/year · save 100 RWF' },
+    USDT: { monthly: '$10', annual: '$99', monthlySub: '/month', annualSub: '/year · save $21' },
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState('');
@@ -69,8 +74,8 @@ function RegisterForm() {
               <button key={p} onClick={() => setPlan(p)}
                 className={`p-4 rounded-xl border-2 text-left transition ${plan === p ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
                 <div className="text-xs font-semibold text-gray-500 capitalize mb-1">{p}</div>
-                <div className="text-lg font-bold text-gray-900">{p === 'monthly' ? '$29' : '$249'}</div>
-                <div className="text-xs text-gray-400">{p === 'monthly' ? '/month' : '/year · save $99'}</div>
+                <div className="text-lg font-bold text-gray-900">{p === 'monthly' ? planPrices[currency].monthly : planPrices[currency].annual}</div>
+                <div className="text-xs text-gray-400">{p === 'monthly' ? planPrices[currency].monthlySub : planPrices[currency].annualSub}</div>
               </button>
             ))}
           </div>

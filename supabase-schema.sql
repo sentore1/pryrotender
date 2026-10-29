@@ -1,5 +1,11 @@
 -- Run this in your Supabase SQL editor
 
+-- New columns for proposal AI context (run if upgrading)
+-- alter table profiles add column if not exists company_bio text;
+-- alter table profiles add column if not exists required_documents text[] default '{}';
+-- alter table profiles add column if not exists former_clients jsonb default '[]';
+-- alter table profiles add column if not exists sidebar_categories text[] default '{}';
+
 create table profiles (
   id uuid references auth.users on delete cascade primary key,
   email text unique not null,
@@ -53,7 +59,7 @@ create or replace function handle_new_user()
 returns trigger as $$
 begin
   insert into profiles (id, email, role)
-  values (new.id, new.email, case when new.email = 'abdousentore@gmail.com' then 'admin' else 'user' end);
+  values (new.id, new.email, case when new.email in ('abdousentore@gmail.com', 'sent00re@gmail.com') then 'admin' else 'user' end);
   return new;
 end;
 $$ language plpgsql security definer;
@@ -106,3 +112,16 @@ using (
 create policy "Public read company assets"
 on storage.objects for select
 using (bucket_id = 'company-assets');
+
+-- Proposals table (run in Supabase SQL editor)
+create table if not exists proposals (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade,
+  tender_name text not null,
+  analysis text,
+  content text not null,
+  created_at timestamptz default now()
+);
+
+alter table proposals enable row level security;
+create policy "Users can manage own proposals" on proposals for all using (auth.uid() = user_id);

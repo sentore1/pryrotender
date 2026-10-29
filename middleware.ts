@@ -37,7 +37,8 @@ export async function middleware(req: NextRequest) {
   const isDashboard = pathname.startsWith('/dashboard');
   const isAdmin = pathname.startsWith('/admin');
   const isSettings = pathname.startsWith('/settings');
-  const isAuth = pathname.startsWith('/login') || pathname.startsWith('/register');
+  const isRegister = pathname.startsWith('/register');
+  const isAuth = pathname.startsWith('/login') || isRegister;
 
   // Settings: page handles its own auth
   if (isSettings) return NextResponse.next();
@@ -50,11 +51,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Logged in + auth page → redirect to dashboard (unless upgrading subscription)
-  if (token && isAuth) {
-    const isUpgrade = req.nextUrl.searchParams.get('reason') === 'subscription';
-    if (!isUpgrade) return NextResponse.redirect(new URL('/dashboard', req.url));
+  // Logged in + login page → redirect to dashboard
+  if (token && pathname.startsWith('/login')) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
   }
+
+  // Register page: never redirect away (used for subscription upgrades)
+  if (isRegister) return NextResponse.next();
 
   // Token exists — check profile
   if (token && (isDashboard || isAdmin)) {
@@ -78,7 +81,9 @@ export async function middleware(req: NextRequest) {
 
       // Dashboard: must have active subscription (admins bypass)
       if (isDashboard && profile?.role !== 'admin' && profile?.subscription_status !== 'active') {
-        return NextResponse.redirect(new URL('/register?reason=subscription', req.url));
+        const registerUrl = new URL('/register', req.url);
+        registerUrl.searchParams.set('reason', 'subscription');
+        return NextResponse.redirect(registerUrl);
       }
     } catch {
       return NextResponse.redirect(new URL('/login', req.url));

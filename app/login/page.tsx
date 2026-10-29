@@ -13,6 +13,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +40,7 @@ function LoginForm() {
         </div>
         <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
           {error && <div className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+          {resetSent && <div className="px-3 py-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">Reset link sent! Check your email inbox.</div>}
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
@@ -50,9 +52,10 @@ function LoginForm() {
               <label className="text-xs font-medium text-gray-600">Password</label>
               <button type="button" onClick={async () => {
                 if (!email) { setError('Enter your email first'); return; }
-                await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` });
+                const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+                if (resetErr) { setError(resetErr.message); return; }
                 setError('');
-                alert('Password reset email sent!');
+                setResetSent(true);
               }} className="text-xs text-blue-600 hover:underline">Forgot password?</button>
             </div>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required

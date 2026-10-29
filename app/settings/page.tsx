@@ -33,7 +33,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'subscription'>('company');
+  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'proposal' | 'subscription'>('company');
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -53,6 +53,12 @@ export default function SettingsPage() {
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
 
+  const [bio, setBio] = useState('');
+  const [requiredDocs, setRequiredDocs] = useState<string[]>([]);
+  const [docInput, setDocInput] = useState('');
+  const [formerClients, setFormerClients] = useState<{ name: string; project: string }[]>([]);
+  const [clientInput, setClientInput] = useState({ name: '', project: '' });
+
   useEffect(() => {
     const loadData = async (uid: string) => {
       const { data: p } = await supabase.from('profiles').select('*').eq('id', uid).single();
@@ -61,6 +67,9 @@ export default function SettingsPage() {
         setCompany({ company_name: p.company_name || '', company_address: p.company_address || '', company_phone: p.company_phone || '', company_website: p.company_website || '', company_ref_prefix: p.company_ref_prefix || '' });
         setLogoUrl(p.logo_url || '');
         setSigUrl(p.signature_url || '');
+        setBio(p.company_bio || '');
+        setRequiredDocs(p.required_documents || []);
+        setFormerClients(p.former_clients || []);
         if (p.sidebar_categories?.length) {
           setSidebarItems(p.sidebar_categories.map((cat: string) => ALL_NAV_CATS.find(n => n.cat === cat) || { label: cat, cat }));
         }
@@ -142,6 +151,13 @@ export default function SettingsPage() {
     setTimeout(() => setTestResult(''), 4000);
   };
 
+  const saveProposal = async () => {
+    setSaving(true);
+    await supabase.from('profiles').update({ company_bio: bio, required_documents: requiredDocs, former_clients: formerClients }).eq('id', userId);
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    setSaving(false);
+  };
+
   const saveSidebar = async () => {
     setSaving(true);
     await supabase.from('profiles').update({ sidebar_categories: sidebarItems.map(i => i.cat) }).eq('id', userId);
@@ -183,7 +199,7 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="flex gap-2 mb-6">
-          {(['company', 'notifications', 'sidebar', 'subscription'] as const).map(t => (
+          {(['company', 'proposal', 'notifications', 'sidebar', 'subscription'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
               {t}
@@ -320,6 +336,70 @@ export default function SettingsPage() {
               </button>
             </div>
             {testResult && <p className={`text-xs text-center font-medium ${testResult.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{testResult}</p>}
+          </div>
+        )}
+
+        {tab === 'proposal' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
+            <div>
+              <h2 className="font-semibold text-gray-800 mb-1">Company Bio</h2>
+              <p className="text-xs text-gray-400 mb-3">Describe your company — background, expertise, mission. The AI will use this when writing proposals.</p>
+              <textarea value={bio} onChange={e => setBio(e.target.value)} rows={5}
+                placeholder="e.g. We are a Kigali-based IT firm founded in 2015, specializing in software development, system integration, and digital transformation for government and private sector clients across East Africa..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-gray-800 mb-1">Required Documents</h2>
+              <p className="text-xs text-gray-400 mb-3">List documents your company has ready for tender submissions. The AI will include these in the proposal checklist.</p>
+              <div className="flex gap-2 mb-3">
+                <input type="text" value={docInput} onChange={e => setDocInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && docInput.trim()) { setRequiredDocs(d => [...d, docInput.trim()]); setDocInput(''); } }}
+                  placeholder="e.g. Tax Clearance Certificate, RDB Registration..."
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button onClick={() => { if (docInput.trim()) { setRequiredDocs(d => [...d, docInput.trim()]); setDocInput(''); } }}
+                  className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Add</button>
+              </div>
+              <div className="space-y-1.5">
+                {requiredDocs.map((doc, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                    <span className="flex-1 text-sm text-gray-700">{doc}</span>
+                    <button onClick={() => setRequiredDocs(d => d.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600 text-xs">✕</button>
+                  </div>
+                ))}
+                {requiredDocs.length === 0 && <p className="text-xs text-gray-400 text-center py-3">No documents added yet.</p>}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-gray-800 mb-1">Former Clients</h2>
+              <p className="text-xs text-gray-400 mb-3">Add past clients and projects. The AI will reference these to strengthen your proposals.</p>
+              <div className="flex gap-2 mb-3">
+                <input type="text" value={clientInput.name} onChange={e => setClientInput(c => ({ ...c, name: e.target.value }))}
+                  placeholder="Client name" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" value={clientInput.project} onChange={e => setClientInput(c => ({ ...c, project: e.target.value }))}
+                  placeholder="Project / work done" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button onClick={() => { if (clientInput.name.trim()) { setFormerClients(f => [...f, { name: clientInput.name.trim(), project: clientInput.project.trim() }]); setClientInput({ name: '', project: '' }); } }}
+                  className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Add</button>
+              </div>
+              <div className="space-y-1.5">
+                {formerClients.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{c.name}</p>
+                      {c.project && <p className="text-xs text-gray-500 truncate">{c.project}</p>}
+                    </div>
+                    <button onClick={() => setFormerClients(f => f.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-600 text-xs shrink-0">✕</button>
+                  </div>
+                ))}
+                {formerClients.length === 0 && <p className="text-xs text-gray-400 text-center py-3">No clients added yet.</p>}
+              </div>
+            </div>
+
+            <button onClick={saveProposal} disabled={saving}
+              className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
+              {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Proposal Settings'}
+            </button>
           </div>
         )}
 

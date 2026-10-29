@@ -6,8 +6,8 @@ const BASE = process.env.PESAPAL_ENV === 'live'
   : 'https://cybqa.pesapal.com/pesapalv3';
 
 const PLANS = {
-  monthly: { amount: 29, currency: 'USD', description: 'PryroTender Monthly Subscription' },
-  annual: { amount: 249, currency: 'USD', description: 'PryroTender Annual Subscription' },
+  monthly: { amount: 10, currency: 'USD', description: 'PryroTender Monthly Subscription' },
+  annual: { amount: 99, currency: 'USD', description: 'PryroTender Annual Subscription' },
 };
 
 async function getToken() {

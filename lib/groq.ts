@@ -1,11 +1,12 @@
 import axios from 'axios';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL = 'qwen/qwen3.8-27b';
 
 export async function generateProposal(
   tenderDetails: string,
   requirements: string,
-  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string }
+  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string; bio?: string; requiredDocuments?: string[]; formerClients?: { name: string; project: string }[] }
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
 
@@ -14,6 +15,17 @@ export async function generateProposal(
   }
 
   const co = companyInfo || {};
+
+  const bioSection = co.bio ? `\nCOMPANY BACKGROUND:\n${co.bio}` : '';
+
+  const docsSection = co.requiredDocuments?.length
+    ? `\nAVAILABLE DOCUMENTS FOR SUBMISSION:\n${co.requiredDocuments.map((d, i) => `${i + 1}. ${d}`).join('\n')}`
+    : '';
+
+  const clientsSection = co.formerClients?.length
+    ? `\nFORMER CLIENTS & PROJECTS (use these in the experience section):\n${co.formerClients.map(c => `- ${c.name}${c.project ? ': ' + c.project : ''}`).join('\n')}`
+    : '';
+
   const prompt = `You are an expert procurement proposal writer in Rwanda with 15+ years of experience writing winning tenders.
 
 SUBMITTING COMPANY:
@@ -22,7 +34,7 @@ Address: ${co.address || '[Address, Kigali, Rwanda]'}
 Phone: ${co.phone || '[+250 XXX XXX XXX]'}
 Email: ${co.email || '[email@company.rw]'}
 Website: ${co.website || '[www.company.rw]'}
-Reference: ${co.refNumber || '[REF-' + new Date().getFullYear() + '-XXX]'}
+Reference: ${co.refNumber || '[REF-' + new Date().getFullYear() + '-XXX]'}${bioSection}${docsSection}${clientsSection}
 
 TENDER DETAILS:
 ${tenderDetails}
@@ -95,7 +107,7 @@ Write formally and persuasively with Rwanda-specific context. Every table must b
     const response = await axios.post(
       GROQ_API_URL,
       {
-        model: 'llama-3.3-70b-versatile',
+        model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
         max_tokens: 8000,

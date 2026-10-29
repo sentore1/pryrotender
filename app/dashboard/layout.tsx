@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ const DEFAULT_NAV_ITEMS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [profile, setProfile] = useState<any>(null);
   const [activeNav, setActiveNav] = useState('');
   const [navItems, setNavItems] = useState(DEFAULT_NAV_ITEMS);
@@ -77,6 +78,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
       <div className="px-3 py-4 space-y-0.5 border-t border-gray-100">
+        <Link href="/dashboard/analyse" onClick={() => setSidebarOpen(false)}
+          className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${pathname === '/dashboard/analyse' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <span>◈</span> Analyse Tender
+        </Link>
+        <Link href="/dashboard/proposals" onClick={() => setSidebarOpen(false)}
+          className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${pathname === '/dashboard/proposals' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <span>📄</span> My Proposals
+        </Link>
+        <Link href="/dashboard/form-filler" onClick={() => setSidebarOpen(false)}
+          className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${pathname === '/dashboard/form-filler' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}>
+          <span>◉</span> Form Filler
+        </Link>
+        <Link href="/dashboard?custom=1" onClick={() => setSidebarOpen(false)}
+          className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900`}>
+          <span>✎</span> Custom Proposal
+        </Link>
         <Link href="/settings" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-3 py-2 text-sm text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg">
           <span>⚙</span> Settings
         </Link>
