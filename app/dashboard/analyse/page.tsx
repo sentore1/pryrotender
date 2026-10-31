@@ -179,7 +179,7 @@ export default function AnalyseTenderPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 max-w-3xl w-full mx-auto">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 w-full">
 
         {view === 'analysis' && (
           <>
@@ -191,7 +191,7 @@ export default function AnalyseTenderPage() {
               onError={setError}
             />
 
-            {error && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+            {error && <div className="mb-4 flex justify-end"><div className="px-4 py-3 bg-red-600 text-white rounded-lg text-sm font-medium inline-block">{error}</div></div>}
 
             {file && !analysis && (
               <button onClick={() => handleAnalyse()} disabled={loading}

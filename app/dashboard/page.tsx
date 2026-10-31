@@ -29,14 +29,14 @@ async function downloadDocx(markdown: string, title: string) {
           new TableRow({
             tableHeader: true,
             children: headers.map(h => new TableCell({
-              shading: { fill: '222222' },
-              children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, color: 'FFFFFF', size: 20 })] })],
+              shading: { fill: 'FFFFFF' },
+              children: [new Paragraph({ children: [new TextRun({ text: h.replace(/\*\*/g, '').replace(/\*/g, ''), bold: true, color: '000000', size: 20, font: 'Times New Roman' })] })],
             })),
           }),
-          ...rows.map((row, ri) => new TableRow({
+          ...rows.map((row) => new TableRow({
             children: row.map(cell => new TableCell({
-              shading: { fill: ri % 2 === 0 ? 'F5F5F5' : 'FFFFFF' },
-              children: [new Paragraph({ children: [new TextRun({ text: cell, size: 20 })] })],
+              shading: { fill: 'FFFFFF' },
+              children: [new Paragraph({ children: [new TextRun({ text: cell.replace(/\*\*/g, '').replace(/\*/g, ''), size: 20, color: '000000', font: 'Times New Roman' })] })],
             })),
           })),
         ],
@@ -47,26 +47,29 @@ async function downloadDocx(markdown: string, title: string) {
 
     // Headings
     if (line.startsWith('## ')) {
-      children.push(new Paragraph({ text: line.replace(/^## /, ''), heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } }));
+      children.push(new Paragraph({ text: line.replace(/^## /, '').replace(/\*\*/g, ''), heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } }));
     } else if (line.startsWith('### ')) {
-      children.push(new Paragraph({ text: line.replace(/^### /, ''), heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 80 } }));
+      children.push(new Paragraph({ text: line.replace(/^### /, '').replace(/\*\*/g, ''), heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 80 } }));
     } else if (line.startsWith('# ')) {
-      children.push(new Paragraph({ text: line.replace(/^# /, ''), heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 200 } }));
-    } else if (line.trim() === '---') {
-      children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } }, text: '' }));
+      children.push(new Paragraph({ text: line.replace(/^# /, '').replace(/\*\*/g, ''), heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 200 } }));
+    } else if (line.trim() === '---' || line.trim().match(/^-{3,}$/)) {
+      children.push(new Paragraph({ text: '' }));
     } else if (line.trim() === '') {
       children.push(new Paragraph({ text: '' }));
     } else {
-      // Inline bold parsing
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      const runs = parts.map(p => p.startsWith('**') && p.endsWith('**')
-        ? new TextRun({ text: p.slice(2, -2), bold: true, size: 22 })
-        : new TextRun({ text: p, size: 22 })
-      );
-      const isBullet = line.trim().startsWith('- ');
+      const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
+      const rawText = isBullet ? line.trim().slice(2) : line;
+      // Inline bold parsing — strip ** markers cleanly
+      const parts = rawText.split(/(\*\*[^*]+\*\*)/g);
+      const runs = parts
+        .filter(p => p !== '')
+        .map(p => p.startsWith('**') && p.endsWith('**')
+          ? new TextRun({ text: p.slice(2, -2), bold: true, size: 22, font: 'Times New Roman' })
+          : new TextRun({ text: p.replace(/\*\*/g, '').replace(/\*/g, ''), size: 22, font: 'Times New Roman' })
+        );
       children.push(new Paragraph({
         bullet: isBullet ? { level: 0 } : undefined,
-        children: isBullet ? [new TextRun({ text: line.trim().slice(2), size: 22 })] : runs,
+        children: runs,
       }));
     }
     i++;
@@ -75,8 +78,8 @@ async function downloadDocx(markdown: string, title: string) {
   const doc = new Document({
     styles: {
       paragraphStyles: [
-        { id: 'Heading2', name: 'Heading 2', run: { color: '000000', bold: true, size: 28 } },
-        { id: 'Heading3', name: 'Heading 3', run: { color: '000000', bold: true, size: 24 } },
+        { id: 'Heading2', name: 'Heading 2', run: { color: '000000', bold: true, size: 28, font: 'Times New Roman' } },
+        { id: 'Heading3', name: 'Heading 3', run: { color: '000000', bold: true, size: 24, font: 'Times New Roman' } },
       ],
     },
     sections: [{ children }],
@@ -92,7 +95,10 @@ function cleanLine(text: string): string {
     .replace(/^#{1,6}\s+/, '')           // remove # headings
     .replace(/\*\*([^*]+)\*\*/g, '$1')   // remove **bold**
     .replace(/\*([^*]+)\*/g, '$1')       // remove *italic*
+    .replace(/__([^_]+)__/g, '$1')       // remove __underline__
+    .replace(/_([^_]+)_/g, '$1')         // remove _italic_
     .replace(/^-{3,}$/, '')              // remove --- lines
+    .replace(/\*\*/g, '').replace(/##/g, '').replace(/__/g, '') // strip leftover symbols
     // eslint-disable-next-line no-misleading-character-class
     .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{1F300}-\u{1F9FF}]/gu, '') // remove emojis
     .trim();
@@ -120,12 +126,12 @@ function ProposalRenderer({ content }: { content: string }) {
         <div key={k++} className="overflow-x-auto my-3">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr>{headers.map((h, j) => <th key={j} className="bg-white text-gray-900 px-3 py-2 text-left font-semibold border border-gray-200">{h}</th>)}</tr>
+              <tr>{headers.map((h, j) => <th key={j} className="bg-white text-gray-900 px-3 py-2 text-left font-semibold border border-black" style={{ fontFamily: '"Times New Roman", Times, serif' }}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((row, ri) => (
                 <tr key={ri} className="bg-white">
-                  {row.map((cell, ci) => <td key={ci} className="px-3 py-1.5 border border-gray-200 text-gray-700">{cell}</td>)}
+                  {row.map((cell, ci) => <td key={ci} className="px-3 py-1.5 border border-black" style={{ fontFamily: '"Times New Roman", Times, serif', color: '#111' }}>{cell}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -139,15 +145,16 @@ function ProposalRenderer({ content }: { content: string }) {
 
     if (raw.trim() === '---' || line === '') {
       elements.push(<div key={k++} className="h-1" />);
-    } else if (raw.trim().startsWith('- ')) {
-      elements.push(<li key={k++} className="ml-4 text-gray-700 list-disc">{cleanLine(raw.trim().slice(2))}</li>);
+    } else if (raw.trim().startsWith('- ') || raw.trim().startsWith('* ')) {
+      const bulletText = raw.trim().startsWith('* ') ? raw.trim().slice(2) : raw.trim().slice(2);
+      elements.push(<li key={k++} className="ml-4 list-disc" style={{ color: '#111' }}>{cleanLine(bulletText)}</li>);
     } else {
-      elements.push(<p key={k++} className="text-gray-700 leading-relaxed">{line}</p>);
+      elements.push(<p key={k++} className="leading-relaxed" style={{ color: '#111' }}>{line}</p>);
     }
     i++;
   }
 
-  return <div className="space-y-0.5">{elements}</div>;
+  return <div className="space-y-0.5" style={{ fontFamily: '"Times New Roman", Times, serif', color: '#111' }}>{elements}</div>;
 }
 
 
@@ -159,32 +166,45 @@ const CAT_COLORS: Record<string, string> = {
   Goods: 'bg-green-600 text-white',
 };
 
-function TenderCard({ tender, selected, generating, onClick }: { tender: Tender; selected: boolean; generating: boolean; onClick: () => void }) {
+function TenderCard({ tender, selected, generating, hasProposal, onClick }: { tender: Tender; selected: boolean; generating: boolean; hasProposal: boolean; onClick: () => void }) {
   const tag = Object.keys(CAT_COLORS).find(k =>
     tender.title?.toLowerCase().includes(k.toLowerCase()) || tender.description?.toLowerCase().includes(k.toLowerCase())
   );
+  const proposalReady = selected && hasProposal;
   return (
-    <div onClick={onClick} className={`bg-white rounded-xl px-4 py-3.5 cursor-pointer transition-all ${selected ? 'shadow-lg' : 'shadow-sm hover:shadow-md'}`}>
+    <div onClick={onClick} className={`bg-white rounded-md px-4 py-3.5 cursor-pointer transition-all ${selected ? 'shadow-lg' : 'shadow-sm hover:shadow-md'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tag ? CAT_COLORS[tag] : 'bg-gray-600 text-white'}`}>{tag || 'Tender'}</span>
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap min-w-0">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${tag ? CAT_COLORS[tag] : 'bg-gray-600 text-white'}`}>{tag || 'Tender'}</span>
+            {tender.organization && tender.organization !== 'Not specified' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 truncate max-w-[140px]">{tender.organization}</span>}
           </div>
-          <p className="text-sm font-semibold text-gray-800 leading-snug truncate">{tender.title}</p>
-          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{tender.description}</p>
+          <p className={`text-sm font-semibold text-gray-800 leading-snug ${proposalReady ? 'line-clamp-2' : 'truncate'}`}>{tender.title}</p>
+          {!proposalReady && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{tender.description}</p>}
         </div>
-        {generating
-          ? <div className="shrink-0 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold">Generating...</div>
-          : selected
-            ? <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold">Selected</span>
-            : <span className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold">Generate</span>
-        }
+        <div className="shrink-0 flex items-center gap-1.5">
+          {!proposalReady && (
+            <a href={tender.url} target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-gray-600 text-xs font-semibold hover:text-gray-900 transition" style={{borderRadius:6}}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              View
+            </a>
+          )}
+          {generating
+            ? <div className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold" style={{borderRadius:6}}><svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>Generating...</div>
+            : proposalReady
+              ? <span className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold" style={{borderRadius:6}}><svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>Generated</span>
+              : selected
+                ? <span className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold" style={{borderRadius:6}}><svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>Selected</span>
+                : <span className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold" style={{borderRadius:6}}>Generate<svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></span>
+          }
+        </div>
       </div>
       <div className="mt-2.5 flex items-center justify-between">
         <span className="text-xs text-gray-400">{tender.deadline}</span>
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          {tender.source && <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tender.source === 'Umucyo (Gov)' ? 'bg-emerald-600 text-white' : 'bg-violet-600 text-white'}`}>{tender.source}</span>}
-          {tender.organization && tender.organization !== 'Not specified' && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-pink-600 text-white">{tender.organization}</span>}
+          {tender.source && <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tender.source === 'Umucyo (Gov)' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}>{tender.source}</span>}
         </div>
       </div>
     </div>
@@ -204,6 +224,7 @@ function DashboardContent() {
   const [chatLoading, setChatLoading] = useState(false);
   const [panelWidth, setPanelWidth] = useState(640);
   const [paymentStatus, setPaymentStatus] = useState<'success' | 'failed' | null>(null);
+  const [profile, setProfile] = useState<{ company_name?: string; company_address?: string; company_email?: string; company_bio?: string; required_documents?: string[]; former_clients?: { name: string; project: string }[]; company_phone?: string; company_website?: string; company_ref_prefix?: string } | null>(null);
   const [customMode, setCustomMode] = useState(false);
   const [customText, setCustomText] = useState('');
   const [customGenerating, setCustomGenerating] = useState(false);
@@ -227,10 +248,16 @@ function DashboardContent() {
     }
     if (params.get('custom') === '1') {
       setCustomMode(true);
-      return;
+    } else {
+      fetchTenders(params.get('category') || '');
     }
-    fetchTenders(params.get('category') || '');
-  }, []);
+    // fetch profile for proposal enrichment
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) supabase.from('profiles').select('company_name,company_address,company_phone,company_email,company_website,company_ref_prefix,company_bio,required_documents,former_clients').eq('id', user.id).single().then(({ data }) => { if (data) setProfile(data); });
+      });
+    });
+  }, [params]);
 
   const fetchTenders = async (cat: string) => {
     setLoading(true); setError(''); setSelectedTender(null); setProposal('');
@@ -248,10 +275,16 @@ function DashboardContent() {
     try {
       const res = await fetch('/api/generate-proposal', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenderDetails: tender.title + '\n\n' + tender.description, requirements: tender.requirements }),
+        body: JSON.stringify({ tenderDetails: tender.title + '\n\n' + tender.description, requirements: tender.requirements, companyInfo: profile ? { name: profile.company_name, address: profile.company_address, phone: profile.company_phone, email: profile.company_email, website: profile.company_website, refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined, bio: profile.company_bio, requiredDocuments: profile.required_documents, formerClients: profile.former_clients } : undefined }),
       });
       const data = await res.json();
-      if (data.success) setProposal(data.proposal); else setError(data.error || 'Failed.');
+      if (data.success) {
+        setProposal(data.proposal);
+        await fetch('/api/proposals', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenderName: tender.title, content: data.proposal }),
+        });
+      } else setError(data.error || 'Failed.');
     } catch { setError('Error.'); } finally { setGenerating(false); }
   };
 
@@ -276,7 +309,13 @@ function DashboardContent() {
         body: JSON.stringify({ tenderDetails: customText, requirements: customText }),
       });
       const data = await res.json();
-      if (data.success) setCustomProposal(data.proposal); else setError(data.error || 'Failed.');
+      if (data.success) {
+        setCustomProposal(data.proposal);
+        await fetch('/api/proposals', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenderName: 'Custom Proposal', content: data.proposal }),
+        });
+      } else setError(data.error || 'Failed.');
     } catch { setError('Error generating proposal.'); } finally { setCustomGenerating(false); }
   };
 
@@ -295,7 +334,7 @@ function DashboardContent() {
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Paste or type your tender details</label>
           <textarea value={customText} onChange={e => setCustomText(e.target.value)}
             placeholder="Paste the full tender description, requirements, scope of work, deadlines, etc..."
-            className="flex-1 min-h-64 w-full p-4 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            className="flex-1 min-h-64 w-full p-4 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-0 focus:border-gray-200 resize-none" />
           <button onClick={generateCustomProposal} disabled={customGenerating || !customText.trim()}
             className="py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {customGenerating ? 'Generating...' : 'Generate Proposal'}
@@ -306,7 +345,7 @@ function DashboardContent() {
           <div className="flex-1 flex flex-col gap-4">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Generated Proposal</label>
             {customGenerating
-              ? <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" /></div>
+              ? <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-10 w-10 border-4 border-black border-t-transparent" /></div>
               : (
                 <div className="flex flex-col gap-3">
                   <div className="border border-gray-200 rounded-xl p-4 text-sm text-gray-700 overflow-y-auto max-h-[60vh]">
@@ -316,7 +355,7 @@ function DashboardContent() {
                     <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { if (!chatInput.trim() || !customProposal) return; setChatLoading(true); fetch('/api/adjust-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proposal: customProposal, instruction: chatInput }) }).then(r => r.json()).then(d => { if (d.success) { setCustomProposal(d.proposal); setChatInput(''); } }).finally(() => setChatLoading(false)); } }}
                       placeholder="Refine proposal..." disabled={chatLoading}
-                      className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
                     <button disabled={chatLoading || !chatInput.trim()} onClick={() => { if (!chatInput.trim() || !customProposal) return; setChatLoading(true); fetch('/api/adjust-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proposal: customProposal, instruction: chatInput }) }).then(r => r.json()).then(d => { if (d.success) { setCustomProposal(d.proposal); setChatInput(''); } }).finally(() => setChatLoading(false)); }}
                       className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">{chatLoading ? '...' : 'Send'}</button>
                   </div>
@@ -344,7 +383,7 @@ function DashboardContent() {
         <button onClick={() => fetchTenders(searchInput)} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
           {loading ? 'Loading...' : 'Search'}
         </button>
-        <span className="ml-auto px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-semibold">{tenders.length} tenders</span>
+        <span className="ml-auto px-2.5 py-1 bg-blue-600 text-white rounded-md text-sm font-semibold">{tenders.length} tenders</span>
       </header>
       <div className="flex-1 overflow-hidden flex relative">
         <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
@@ -360,11 +399,10 @@ function DashboardContent() {
               <button onClick={() => setPaymentStatus(null)} className="text-white opacity-70 hover:opacity-100">✕</button>
             </div>
           )}
-          {error && <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+          {error && <div className="mb-4 px-4 py-3 bg-orange-500 text-white rounded-lg text-sm">{error}</div>}
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-              <p className="text-sm text-gray-500">Loading tenders...</p>
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-black border-t-transparent"></div>
             </div>
           ) : (
             <>
@@ -375,7 +413,7 @@ function DashboardContent() {
                     <span className="text-xs font-bold text-gray-400">{open.length}</span>
                   </div>
                   <div className="space-y-2">
-                    {open.map(t => <TenderCard key={t.id} tender={t} selected={selectedTender?.id === t.id} generating={generating && selectedTender?.id === t.id} onClick={() => generateProposal(t)} />)}
+                    {open.map(t => <TenderCard key={t.id} tender={t} selected={selectedTender?.id === t.id} generating={generating && selectedTender?.id === t.id} hasProposal={!!(selectedTender?.id === t.id && proposal)} onClick={() => generateProposal(t)} />)}
                   </div>
                 </section>
               )}
@@ -385,7 +423,7 @@ function DashboardContent() {
                     <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Closed</span>
                   </div>
                   <div className="space-y-2">
-                    {closed.map(t => <TenderCard key={t.id} tender={t} selected={selectedTender?.id === t.id} generating={generating && selectedTender?.id === t.id} onClick={() => generateProposal(t)} />)}
+                    {closed.map(t => <TenderCard key={t.id} tender={t} selected={selectedTender?.id === t.id} generating={generating && selectedTender?.id === t.id} hasProposal={!!(selectedTender?.id === t.id && proposal)} onClick={() => generateProposal(t)} />)}
                   </div>
                 </section>
               )}
@@ -401,17 +439,17 @@ function DashboardContent() {
           </div>
           <div className="flex-1 overflow-y-auto p-5">
             {!selectedTender && <div className="flex items-center justify-center h-full"><p className="text-sm text-gray-400">Click a tender to generate a proposal</p></div>}
-            {selectedTender && generating && <div className="flex flex-col items-center justify-center h-full gap-3"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div><p className="text-sm text-gray-500">Generating AI proposal...</p></div>}
+            {selectedTender && generating && <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-10 w-10 border-4 border-black border-t-transparent"></div></div>}
             {selectedTender && !generating && proposal && (
               <div className="space-y-4">
                 <h3 className="text-sm font-bold text-gray-800">{selectedTender.title}</h3>
                 <div className="bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-700 max-h-96 overflow-y-auto prose prose-sm max-w-none">
                   <ProposalRenderer content={proposal} />
                 </div>
-                <div className="flex gap-2 p-2 border border-gray-200 rounded-lg">
+                <div className="flex gap-2 pt-2 border border-gray-200 rounded-lg p-2">
                   <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendChatUpdate()}
                     placeholder="Update proposal..." disabled={chatLoading}
-                    className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
                   <button onClick={sendChatUpdate} disabled={chatLoading || !chatInput.trim()} className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
                     {chatLoading ? '...' : 'Send'}
                   </button>
@@ -435,7 +473,7 @@ function DashboardContent() {
                 <button onClick={() => { setSelectedTender(null); setProposal(''); }} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
               </div>
               <div className="flex-1 overflow-y-auto p-5">
-                {generating && <div className="flex flex-col items-center justify-center h-40 gap-3"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div><p className="text-sm text-gray-500">Generating AI proposal...</p></div>}
+                {generating && <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-10 w-10 border-4 border-black border-t-transparent"></div></div>}
                 {!generating && proposal && (
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-gray-800">{selectedTender.title}</h3>
@@ -443,9 +481,9 @@ function DashboardContent() {
                       <ProposalRenderer content={proposal} />
                     </div>
                     <div className="flex gap-2 p-2 border border-gray-200 rounded-lg">
-                      <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendChatUpdate()}
+                    <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendChatUpdate()}
                         placeholder="Update proposal..." disabled={chatLoading}
-                        className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
                       <button onClick={sendChatUpdate} disabled={chatLoading || !chatInput.trim()} className="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
                         {chatLoading ? '...' : 'Send'}
                       </button>
@@ -467,7 +505,7 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-10 w-10 border-4 border-black border-t-transparent"></div></div>}>
       <DashboardContent />
     </Suspense>
   );

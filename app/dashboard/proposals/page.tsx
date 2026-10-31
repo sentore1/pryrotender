@@ -60,7 +60,6 @@ export default function ProposalsPage() {
 
         {!loading && proposals.length === 0 && (
           <div className="text-center py-16 text-gray-400">
-            <p className="text-4xl mb-3">📄</p>
             <p className="text-sm font-medium">No proposals yet</p>
             <p className="text-xs mt-1">Analyse a tender and generate a proposal to see it here.</p>
           </div>

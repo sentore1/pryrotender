@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +18,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, proposals: data });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed to fetch proposals' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const token = request.cookies.get('sb-access-token')?.value;
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+    const { tenderName, content } = await request.json();
+    const { error } = await supabaseAdmin().from('proposals').insert({
+      user_id: user.id,
+      tender_name: tenderName || 'Untitled Tender',
+      content,
+      created_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: 'Failed to save proposal' }, { status: 500 });
   }
 }
 

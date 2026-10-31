@@ -70,7 +70,11 @@ export async function middleware(req: NextRequest) {
       );
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return NextResponse.redirect(new URL('/login', req.url));
+      if (!user) {
+        const res = NextResponse.redirect(new URL('/login', req.url));
+        res.cookies.delete('sb-access-token');
+        return res;
+      }
 
       const { data: profile } = await supabase.from('profiles').select('subscription_status, role').eq('id', user.id).single();
 
@@ -86,7 +90,9 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(registerUrl);
       }
     } catch {
-      return NextResponse.redirect(new URL('/login', req.url));
+      const res = NextResponse.redirect(new URL('/login', req.url));
+      res.cookies.delete('sb-access-token');
+      return res;
     }
   }
 

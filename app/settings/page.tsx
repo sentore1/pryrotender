@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -30,6 +30,7 @@ type SidebarItem = { label: string; cat: string };
 export default function SettingsPage() {
   const router = useRouter();
   const [userId, setUserId] = useState('');
+  const userIdRef = useRef('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,7 +38,7 @@ export default function SettingsPage() {
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [company, setCompany] = useState({ company_name: '', company_address: '', company_phone: '', company_website: '', company_ref_prefix: '' });
+  const [company, setCompany] = useState({ company_name: '', company_address: '', company_phone: '', company_email: '', company_website: '', company_ref_prefix: '' });
   const [logoUrl, setLogoUrl] = useState('');
   const [sigUrl, setSigUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>(ALL_NAV_CATS.slice(0, 5));
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [umucyoCats, setUmucyoCats] = useState<SidebarItem[]>([]);
 
   const [bio, setBio] = useState('');
   const [requiredDocs, setRequiredDocs] = useState<string[]>([]);
@@ -64,7 +66,7 @@ export default function SettingsPage() {
       const { data: p } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (p) {
         setProfile(p);
-        setCompany({ company_name: p.company_name || '', company_address: p.company_address || '', company_phone: p.company_phone || '', company_website: p.company_website || '', company_ref_prefix: p.company_ref_prefix || '' });
+        setCompany({ company_name: p.company_name || '', company_address: p.company_address || '', company_phone: p.company_phone || '', company_email: p.company_email || '', company_website: p.company_website || '', company_ref_prefix: p.company_ref_prefix || '' });
         setLogoUrl(p.logo_url || '');
         setSigUrl(p.signature_url || '');
         setBio(p.company_bio || '');
@@ -83,6 +85,7 @@ export default function SettingsPage() {
       if (event === 'INITIAL_SESSION') {
         if (!session) { router.push('/login'); return; }
         setUserId(session.user.id);
+        userIdRef.current = session.user.id;
         loadData(session.user.id);
       }
     });
@@ -160,10 +163,18 @@ export default function SettingsPage() {
 
   const saveSidebar = async () => {
     setSaving(true);
-    await supabase.from('profiles').update({ sidebar_categories: sidebarItems.map(i => i.cat) }).eq('id', userId);
+    await supabase.from('profiles').update({ sidebar_categories: sidebarItems.map(i => i.cat) }).eq('id', userIdRef.current);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     setSaving(false);
   };
+
+  useEffect(() => {
+    if (tab !== 'sidebar' || umucyoCats.length) return;
+    fetch('/api/categories').then(r => r.json()).then(d => {
+      const extra: SidebarItem[] = (d.categories as string[]).map((c: string) => ({ label: c, cat: c }));
+      setUmucyoCats(extra);
+    }).catch(() => {});
+  }, [tab]);
 
   const addToSidebar = (item: SidebarItem) => {
     if (!sidebarItems.find(i => i.cat === item.cat)) setSidebarItems(prev => [...prev, item]);
@@ -210,7 +221,7 @@ export default function SettingsPage() {
         {tab === 'company' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold text-gray-800">Company Details</h2>
-            {[['company_name', 'Company Name'], ['company_address', 'Address'], ['company_phone', 'Phone'], ['company_website', 'Website'], ['company_ref_prefix', 'Reference Prefix (e.g. REF)']].map(([field, label]) => (
+            {[['company_name', 'Company Name'], ['company_address', 'Address'], ['company_phone', 'Phone'], ['company_email', 'Email'], ['company_website', 'Website'], ['company_ref_prefix', 'Reference Prefix (e.g. REF)']].map(([field, label]) => (
               <div key={field}>
                 <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
                 <input type="text" value={(company as any)[field]} onChange={e => setCompany(c => ({ ...c, [field]: e.target.value }))}
@@ -413,16 +424,17 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               {sidebarSearch && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                  {ALL_NAV_CATS.filter(c =>
-                    c.label.toLowerCase().includes(sidebarSearch.toLowerCase()) &&
-                    !sidebarItems.find(i => i.cat === c.cat)
-                  ).map(item => (
-                    <button key={item.cat} onClick={() => addToSidebar(item)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">
-                      + {item.label}
-                    </button>
-                  ))}
-                  {!ALL_NAV_CATS.find(c => c.label.toLowerCase() === sidebarSearch.toLowerCase()) && (
+                  {[...ALL_NAV_CATS, ...umucyoCats.filter(u => !ALL_NAV_CATS.find(a => a.cat === u.cat))]
+                    .filter(c =>
+                      c.label.toLowerCase().includes(sidebarSearch.toLowerCase()) &&
+                      !sidebarItems.find(i => i.cat === c.cat)
+                    ).map(item => (
+                      <button key={item.cat} onClick={() => addToSidebar(item)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700">
+                        + {item.label}
+                      </button>
+                    ))}
+                  {![...ALL_NAV_CATS, ...umucyoCats].find(c => c.label.toLowerCase() === sidebarSearch.toLowerCase()) && (
                     <button onClick={() => addToSidebar({ label: sidebarSearch, cat: sidebarSearch })}
                       className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50">
                       + Add &quot;{sidebarSearch}&quot; as custom

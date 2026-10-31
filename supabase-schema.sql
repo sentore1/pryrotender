@@ -44,6 +44,8 @@ create table notification_preferences (
   frequency text default 'daily', -- 'instant' | 'daily'
   keywords text[] default '{}',
   categories text[] default '{}',
+  notification_email text,
+  extra_emails text[] default '{}',
   updated_at timestamptz default now()
 );
 

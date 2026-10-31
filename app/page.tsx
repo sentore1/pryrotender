@@ -1,57 +1,87 @@
-'use client';
-import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Suspense } from 'react';
+import { scrapeTenders, Tender } from '@/lib/scraper';
+import PricingSection from './PricingSection';
 
-const SAMPLE_TENDERS = [
-  { id: 1, title: 'Supply of ICT Equipment for Ministry of Education', org: 'Ministry of Education', deadline: '2025-08-15', cat: 'IT', source: 'Umucyo Gov' },
-  { id: 2, title: 'Construction of District Hospital – Phase 2', org: 'Rwanda Health Board', deadline: '2025-08-20', cat: 'Construction', source: 'Umucyo Gov' },
-  { id: 3, title: 'Consultancy for Strategic Plan Development', org: 'RURA', deadline: '2025-08-10', cat: 'Consultancy', source: 'Job in Rwanda' },
-  { id: 4, title: 'Supply of Medical Consumables and Pharmaceuticals', org: 'RNPHR', deadline: '2025-08-25', cat: 'Medical', source: 'Umucyo Gov' },
-  { id: 5, title: 'Provision of Security Services – Kigali Office', org: 'BNR', deadline: '2025-09-01', cat: 'Services', source: 'Job in Rwanda' },
-  { id: 6, title: 'Supply of Office Furniture and Equipment', org: 'RDB', deadline: '2025-08-30', cat: 'Goods', source: 'Umucyo Gov' },
-];
+async function TendersGrid() {
+  let tenders: Tender[] = [];
+  try {
+    const all = await scrapeTenders('');
+    tenders = all.slice(0, 6);
+  } catch {
+    tenders = [];
+  }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {tenders.length === 0 ? (
+        <p className="text-sm text-gray-400 col-span-2 text-center">No tenders available right now. Check back soon.</p>
+      ) : tenders.map((t, i) => (
+        <div key={i} className="bg-white border border-gray-100 p-5 shadow-sm hover:shadow-lg transition-all duration-200 relative overflow-hidden group flex flex-col gap-3" style={{borderRadius:'8px'}}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2.5 py-1 text-white bg-blue-600" style={{borderRadius:'4px'}}>{t.category || 'Tender'}</span>
+              <span className="text-xs font-semibold text-gray-500">{t.organization && t.organization !== 'Not specified' ? t.organization : ''}</span>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 text-gray-500 bg-gray-100" style={{borderRadius:'4px'}}>{t.source}</span>
+          </div>
+          <p className="text-sm font-semibold text-gray-900 leading-snug">{t.title}</p>
+          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span className="text-xs text-gray-400">Deadline: <span className="font-medium text-gray-600">{t.deadline}</span></span>
+            </div>
+            <Link href="/register" className="text-xs font-semibold px-2.5 py-1 bg-blue-600 text-white hover:bg-blue-700 transition" style={{borderRadius:'4px'}}>Generate Proposal →</Link>
+          </div>
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{borderRadius:'8px'}}>
+            <Link href="/register" className="px-5 py-2 bg-gray-900 text-white text-xs font-semibold shadow-md" style={{borderRadius:'4px'}}>Sign up to access</Link>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-const CAT_COLORS: Record<string, string> = {
-  IT: 'text-white' ,
-  Construction: 'text-white',
-  Medical: 'text-white',
-  Consultancy: 'text-white',
-  Goods: 'text-white',
-  Services: 'text-white',
-};
+function TendersSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {Array.from({length: 6}).map((_, i) => (
+        <div key={i} className="bg-white border border-gray-100 p-5 shadow-sm flex flex-col gap-3 animate-pulse" style={{borderRadius:'8px'}}>
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-16 bg-gray-200 rounded" />
+            <div className="h-4 w-24 bg-gray-100 rounded" />
+          </div>
+          <div className="h-4 w-full bg-gray-200 rounded" />
+          <div className="h-4 w-3/4 bg-gray-100 rounded" />
+          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+            <div className="h-3 w-28 bg-gray-100 rounded" />
+            <div className="h-6 w-28 bg-gray-200 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-const CAT_BG: Record<string, string> = {
-  IT: '#3A86FF',
-  Construction: '#3A86FF',
-  Medical: '#3A86FF',
-  Consultancy: '#3A86FF',
-  Goods: '#3A86FF',
-  Services: '#3A86FF',
-};
-
-export default function LandingPage() {
-  const [currency, setCurrency] = React.useState<'RWF' | 'USDT'>('RWF');
-  const prices = {
-    RWF: { monthly: '100 RWF', annual: '100 RWF', save: 'Save 100 RWF vs monthly' },
-    USDT: { monthly: '$10 USDT', annual: '$99 USDT', save: 'Save $21 USDT vs monthly' },
-  };
+export default async function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
 
       {/* Nav */}
       <nav className="bg-white px-5 md:px-8 py-4 flex items-center justify-between max-w-6xl mx-auto">
-        <Image src="/logo.png" alt="PryroTender" width={110} height={36} style={{ height: 'auto' }} className="object-contain" priority />
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-          <a href="#features" className="hover:text-gray-900 transition">Features</a>
-          <a href="#pricing" className="hover:text-gray-900 transition">Pricing</a>
-          <a href="#tenders" className="hover:text-gray-900 transition">Tenders</a>
-          <a href="mailto:abdousentore@gmail.com" className="hover:text-gray-900 transition">Contact</a>
-        </div>
+        <Image src="/logo.png" alt="PryroTender" width={60} height={20} style={{ height: 'auto' }} className="object-contain" priority />
+        <div className="flex items-center gap-5">
+          <div className="hidden md:flex items-center gap-5 text-sm font-medium text-gray-600">
+            <a href="#features" className="hover:text-gray-900 transition">Features</a>
+            <a href="#pricing" className="hover:text-gray-900 transition">Pricing</a>
+            <a href="#tenders" className="hover:text-gray-900 transition">Tenders</a>
+            <a href="mailto:abdousentore@gmail.com" className="hover:text-gray-900 transition">Contact</a>
+          </div>
         <Link href="/register"
-          className="text-xs md:text-sm font-semibold px-4 py-2 md:px-5 md:py-2.5 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition" style={{borderRadius:'4px'}}>
+          className="text-xs font-semibold px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:bg-gray-50 transition" style={{borderRadius:'4px'}}>
           Get Started
         </Link>
+        </div>
       </nav>
 
       {/* Hero */}
@@ -65,9 +95,11 @@ export default function LandingPage() {
           Access every Rwanda government and private tender in one place.<br />
           Generate professional proposals in seconds.
         </p>
-        <div className="flex items-center justify-center gap-3 mb-10 md:mb-16">
-          <Link href="/register" className="px-5 py-2.5 md:px-6 md:py-3 bg-gray-900 text-white font-semibold hover:bg-gray-700 transition text-sm shadow-sm" style={{borderRadius:'4px'}}>Start for Free</Link>
-          <Link href="#pricing" className="px-5 py-2.5 md:px-6 md:py-3 bg-white text-gray-700 font-semibold border border-gray-200 hover:bg-gray-50 transition text-sm shadow-sm" style={{borderRadius:'4px'}}>View Pricing</Link>
+        <div className="flex items-center justify-center gap-1 mb-10 md:mb-16">
+          <div className="flex bg-gray-100 p-1 gap-1" style={{borderRadius:'4px'}}>
+            <Link href="/register" className="px-3 py-1.5 bg-white text-gray-900 font-semibold shadow text-xs" style={{borderRadius:'4px'}}>Start for Free</Link>
+            <Link href="#pricing" className="px-3 py-1.5 text-gray-500 font-semibold hover:text-gray-700 transition text-xs" style={{borderRadius:'4px'}}>View Pricing</Link>
+          </div>
         </div>
       </section>
 
@@ -76,7 +108,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
         <div className="relative z-10 flex flex-col md:flex-row items-start justify-center gap-4 px-4 md:px-6 pt-8 md:pt-12 pb-0 max-w-6xl mx-auto">
           {/* Left — stacked tender cards */}
-          <div className="w-full md:w-[320px] md:shrink-0 space-y-2" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
+          <div className="w-full md:w-[320px] md:shrink-0 space-y-2" style={{fontFamily:'Inter,system-ui,sans-serif', background:'rgba(255,255,255,0.18)', borderRadius:'4px', padding:'12px', backdropFilter:'blur(2px)'}}>
             {/* Card 1 — selected */}
             <div className="bg-white shadow-lg px-4 py-3.5" style={{borderRadius:'4px'}}>
               <div className="flex items-start justify-between gap-3">
@@ -92,7 +124,7 @@ export default function LandingPage() {
               <div className="mt-2.5 flex items-center justify-between">
                 <span className="text-xs text-gray-400">29-10-2026</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-violet-600 text-white" style={{borderRadius:'4px'}}>Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500" style={{borderRadius:'4px'}}>Job in Rwanda</span>
                 </div>
               </div>
             </div>
@@ -111,7 +143,7 @@ export default function LandingPage() {
               <div className="mt-2.5 flex items-center justify-between">
                 <span className="text-xs text-gray-400">09-11-2026</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-violet-600 text-white" style={{borderRadius:'4px'}}>Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500" style={{borderRadius:'4px'}}>Job in Rwanda</span>
                 </div>
               </div>
             </div>
@@ -130,7 +162,7 @@ export default function LandingPage() {
               <div className="mt-2.5 flex items-center justify-between">
                 <span className="text-xs text-gray-400">09-11-2026</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-violet-600 text-white" style={{borderRadius:'4px'}}>Job in Rwanda</span>
+                  <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500" style={{borderRadius:'4px'}}>Job in Rwanda</span>
                 </div>
               </div>
             </div>
@@ -149,14 +181,15 @@ export default function LandingPage() {
               <div className="mt-2.5 flex items-center justify-between">
                 <span className="text-xs text-gray-400">15-12-2026</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold px-2 py-0.5 bg-violet-600 text-white" style={{borderRadius:'4px'}}>Umucyo Gov</span>
+                  <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500" style={{borderRadius:'4px'}}>Umucyo Gov</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Right — Generated Proposal panel */}
-          <div className="hidden md:block bg-white shadow-2xl w-[780px] shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif', borderRadius:'4px'}}>
+          <div className="hidden md:block" style={{background:'rgba(255,255,255,0.18)', borderRadius:'4px', padding:'12px', backdropFilter:'blur(2px)'}}>
+          <div className="bg-white shadow-2xl w-[780px] shrink-0 overflow-hidden" style={{fontFamily:'Inter,system-ui,sans-serif', borderRadius:'4px'}}>
             <div className="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-800">Generated Proposal</h2>
               <span className="text-gray-600 text-base">✕</span>
@@ -164,7 +197,7 @@ export default function LandingPage() {
             <div className="px-5 py-4 bg-gray-100">
               <p className="text-xs font-semibold text-gray-800 mb-3">Tender Notice for Supply of Three (3) Interactive Smart Screen to BRD Head Office</p>
               {/* Scrollable document — 3 pages separated by dividers */}
-              <div className="border border-gray-200 overflow-y-auto bg-white" style={{borderRadius:'4px', maxHeight:'400px', fontFamily:'"Times New Roman", Times, serif'}}>
+              <div className="border border-gray-200 overflow-y-auto bg-white" style={{borderRadius:'4px', maxHeight:'450px', fontFamily:'"Times New Roman", Times, serif'}}>
                 {/* Header */}
                 <div className="px-5 pt-5 pb-3 flex items-center justify-between border-b border-gray-100">
                   <Image src="/logo.png" alt="PryroTender" width={90} height={30} style={{height:'auto'}} className="object-contain" />
@@ -278,6 +311,7 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </section>
 
@@ -288,27 +322,9 @@ export default function LandingPage() {
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Live Tenders Preview</h2>
             <p className="text-gray-500 text-sm">Sign up to access all tenders and generate proposals.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {SAMPLE_TENDERS.map(t => (
-              <div key={t.id} className="border border-gray-100 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden group" style={{borderRadius:'4px'}}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CAT_COLORS[t.cat] || 'text-gray-600'}`} style={{backgroundColor: CAT_BG[t.cat] || '#C1E4F8'}}>{t.cat}</span>
-                    <span className="text-xs font-semibold text-gray-900">{t.org}</span>
-                  </div>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full`} style={{backgroundColor: '#3A86FF', color:'white'}}>{t.source}</span>
-                </div>
-                <p className="text-sm font-semibold text-gray-800 leading-snug mb-1">{t.title}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Deadline: {t.deadline}</span>
-                  <Link href="/register" className="text-xs font-semibold text-blue-600 hover:underline">Generate Proposal →</Link>
-                </div>
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-                  <Link href="/register" className="px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-full shadow">Sign up to access</Link>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Suspense fallback={<TendersSkeleton />}>
+            <TendersGrid />
+          </Suspense>
           <div className="text-center mt-8">
             <Link href="/register" className="inline-block px-6 py-3 text-white font-semibold hover:opacity-90 transition text-sm" style={{borderRadius:'4px', backgroundColor:'#3A86FF'}}>
               View All Tenders →
@@ -318,44 +334,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="bg-white py-10 md:py-16">
-        <div className="max-w-4xl mx-auto px-4 md:px-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-2">Our Pricing</h2>
-          <p className="text-center text-gray-500 text-sm mb-6">Cancel anytime. No hidden fees.</p>
-          {/* Currency switcher */}
-          <div className="flex items-center justify-center mb-10">
-            <div className="flex bg-gray-100 p-1 gap-1" style={{borderRadius:'4px'}}>
-              <button onClick={() => setCurrency('RWF')} className={`px-4 py-1.5 text-sm font-semibold transition ${currency === 'RWF' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`} style={{borderRadius:'4px'}}>RWF</button>
-              <button onClick={() => setCurrency('USDT')} className={`px-4 py-1.5 text-sm font-semibold transition ${currency === 'USDT' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`} style={{borderRadius:'4px'}}>USDT</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            <div className="bg-white border border-gray-200 p-6 hover:shadow-md transition" style={{borderRadius:'4px'}}>
-              <div className="text-sm font-semibold text-gray-500 mb-1">Monthly</div>
-              <div className="text-3xl font-bold text-gray-900 mb-1">{prices[currency].monthly} <span className="text-base font-normal text-gray-400">/mo</span></div>
-              <p className="text-xs text-gray-400 mb-5">Billed monthly</p>
-              <ul className="space-y-2 text-sm text-gray-600 mb-6">
-                {['All tenders access', 'Unlimited AI proposals', 'Email notifications', 'Word export', 'Company branding'].map(f => (
-                  <li key={f} className="flex items-center gap-2"><span className="text-green-500">✓</span>{f}</li>
-                ))}
-              </ul>
-              <Link href={`/register?plan=monthly&currency=${currency}`} className="block text-center py-2.5 font-semibold hover:opacity-90 transition text-sm text-white" style={{borderRadius:'4px', backgroundColor:'#3A86FF'}}>Get Started</Link>
-            </div>
-            <div className="bg-white border border-gray-100 p-6 relative shadow-md" style={{borderRadius:'4px'}}>
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-bold px-3 py-1 rounded-full" style={{backgroundColor:'#22C55E'}}>Best Value</span>
-              <div className="text-sm font-semibold text-gray-900 mb-1">Annual</div>
-              <div className="text-3xl font-bold text-gray-900 mb-1">{prices[currency].annual} <span className="text-base font-normal text-gray-400">/yr</span></div>
-              <p className="text-xs text-gray-400 mb-5">{prices[currency].save}</p>
-              <ul className="space-y-2 text-sm text-gray-600 mb-6">
-                {['All tenders access', 'Unlimited AI proposals', 'Email notifications', 'Word export', 'Company branding', 'Priority support'].map(f => (
-                  <li key={f} className="flex items-center gap-2"><span className="text-green-500">✓</span>{f}</li>
-                ))}
-              </ul>
-              <Link href={`/register?plan=annual&currency=${currency}`} className="block text-center py-2.5 font-semibold hover:opacity-90 transition text-sm text-white" style={{borderRadius:'4px', backgroundColor:'#3A86FF'}}>Get Started</Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PricingSection />
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-8 text-center text-xs text-gray-400">

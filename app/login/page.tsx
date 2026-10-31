@@ -1,5 +1,5 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +14,9 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  // Clear any stale token so middleware doesn't redirect away before we log in
+  useEffect(() => { document.cookie = 'sb-access-token=; path=/; max-age=0'; }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,14 +34,14 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Link href="/"><Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain mx-auto" /></Link>
+          <Link href="/"><Image src="/logo.png" alt="PryroTender" width={90} height={28} className="object-contain mx-auto" /></Link>
           <h1 className="text-xl font-bold text-gray-900 mt-4">Welcome back</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
         </div>
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <form onSubmit={handleLogin} className="bg-white rounded shadow-sm border border-gray-100 p-6 space-y-4">
           {error && <div className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
           {resetSent && <div className="px-3 py-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">Reset link sent! Check your email inbox.</div>}
           <div>

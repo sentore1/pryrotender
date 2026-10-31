@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, proposal: proposal });
     }
 
-    const truncated = proposal.length > 12000 ? proposal.slice(0, 12000) : proposal;
+    const truncated = proposal.length > 6000 ? proposal.slice(0, 6000) : proposal;
     const userMsg = 'Here is the current proposal:\n\n' + truncated + '\n\nInstruction: ' + instruction + '\n\nReturn the full revised proposal.';
 
     const response = await axios.post(

@@ -15,30 +15,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch profile to enrich AI context
+    // Use companyInfo from request body directly (passed from dashboard)
     let enrichedCompanyInfo = companyInfo || {};
-    try {
-      const token = request.cookies.get('sb-access-token')?.value;
-      if (token) {
-        const { data: { user } } = await supabase.auth.getUser(token);
-        if (user) {
-          const { data: profile } = await supabase.from('profiles').select('company_name,company_address,company_phone,company_website,company_ref_prefix,company_bio,required_documents,former_clients').eq('id', user.id).single();
-          if (profile) {
-            enrichedCompanyInfo = {
-              name: profile.company_name,
-              address: profile.company_address,
-              phone: profile.company_phone,
-              website: profile.company_website,
-              refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined,
-              bio: profile.company_bio,
-              requiredDocuments: profile.required_documents,
-              formerClients: profile.former_clients,
-              ...companyInfo,
-            };
+    if (!companyInfo) {
+      try {
+        const token = request.cookies.get('sb-access-token')?.value;
+        if (token) {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          if (user) {
+            const { data: profile } = await supabase.from('profiles').select('company_name,company_address,company_phone,company_website,company_ref_prefix,company_bio,required_documents,former_clients').eq('id', user.id).single();
+            if (profile) {
+              enrichedCompanyInfo = {
+                name: profile.company_name,
+                address: profile.company_address,
+                phone: profile.company_phone,
+                website: profile.company_website,
+                refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined,
+                bio: profile.company_bio,
+                requiredDocuments: profile.required_documents,
+                formerClients: profile.former_clients,
+              };
+            }
           }
         }
-      }
-    } catch { /* continue without profile enrichment */ }
+      } catch { /* continue without profile enrichment */ }
+    }
 
     const proposal = await generateProposal(tenderDetails, requirements, enrichedCompanyInfo);
 

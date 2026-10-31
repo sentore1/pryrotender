@@ -1,7 +1,7 @@
 'use client';
 import { useRef } from 'react';
 
-const MAX_MB = 5;
+const MAX_MB = 10;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 interface Props {
