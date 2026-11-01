@@ -1,18 +1,84 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 
+async function urlToBuffer(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.arrayBuffer();
+  } catch { return null; }
+}
+
 async function downloadDocx(content: string, filename: string) {
+  // Fetch profile for logo/signature/company info
+  const { data: { user } } = await supabase.auth.getUser();
+  let logoUrl = '', signatureUrl = '', companyName = '', companyAddress = '', companyPhone = '', companyEmail = '', companyWebsite = '', refNumber = '';
+  if (user) {
+    const { data: p } = await supabase.from('profiles').select('logo_url,signature_url,company_name,company_address,company_phone,company_email,company_website,company_ref_prefix').eq('id', user.id).single();
+    if (p) {
+      logoUrl = p.logo_url || '';
+      signatureUrl = p.signature_url || '';
+      companyName = p.company_name || '';
+      companyAddress = p.company_address || '';
+      companyPhone = p.company_phone || '';
+      companyEmail = p.company_email || '';
+      companyWebsite = p.company_website || '';
+      refNumber = p.company_ref_prefix ? `${p.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}` : '';
+    }
+  }
+
   const lines = content.split('\n');
-  const children = lines.map(line => {
-    if (line.startsWith('## ')) return new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2 });
-    if (line.startsWith('### ')) return new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3 });
-    if (line.trim() === '') return new Paragraph({ text: '' });
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
-    return new Paragraph({ children: parts.map(p => p.startsWith('**') && p.endsWith('**') ? new TextRun({ text: p.slice(2, -2), bold: true, size: 22 }) : new TextRun({ text: p, size: 22 })) });
-  });
+  const children: Paragraph[] = [];
+
+  // Logo
+  if (logoUrl) {
+    const buf = await urlToBuffer(logoUrl);
+    if (buf) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.LEFT,
+        children: [new ImageRun({ data: buf, transformation: { width: 130, height: 45 }, type: 'png' })],
+        spacing: { after: 80 },
+      }));
+    }
+  }
+
+  // Company header info
+  const headerLines = [companyName, companyAddress, companyPhone, companyEmail, companyWebsite, refNumber ? `Ref: ${refNumber}` : '', `Date: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`].filter(Boolean);
+  for (const info of headerLines) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: info, size: 20, bold: info === companyName })],
+      spacing: { after: 40 },
+    }));
+  }
+  children.push(new Paragraph({ text: '\u2500'.repeat(60), spacing: { after: 200 } }));
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2 }));
+    else if (line.startsWith('### ')) children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3 }));
+    else if (line.trim() === '') children.push(new Paragraph({ text: '' }));
+    else {
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      children.push(new Paragraph({ children: parts.map(p => p.startsWith('**') && p.endsWith('**') ? new TextRun({ text: p.slice(2, -2), bold: true, size: 22 }) : new TextRun({ text: p, size: 22 })) }));
+    }
+  }
+
+  // Footer: company name + stamp
+  children.push(new Paragraph({ text: '', spacing: { before: 400 } }));
+  if (companyName) children.push(new Paragraph({ children: [new TextRun({ text: companyName, bold: true, size: 22 })] }));
+  if (signatureUrl) {
+    const buf = await urlToBuffer(signatureUrl);
+    if (buf) {
+      children.push(new Paragraph({
+        children: [new ImageRun({ data: buf, transformation: { width: 150, height: 60 }, type: 'png' })],
+        spacing: { before: 100 },
+      }));
+    }
+  }
+
   const blob = await Packer.toBlob(new Document({ sections: [{ children }] }));
   saveAs(blob, filename);
 }

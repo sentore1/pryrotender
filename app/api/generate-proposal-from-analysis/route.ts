@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('company_name,company_address,company_phone,company_website,company_ref_prefix,company_bio,required_documents,former_clients,logo_url,signature_url')
+      .select('company_name,company_address,company_phone,company_email,company_website,company_ref_prefix,company_bio,required_documents,former_clients,logo_url,signature_url')
       .eq('id', user.id)
       .single();
 
@@ -66,6 +66,13 @@ export async function POST(request: NextRequest) {
         logoUrl: profile?.logo_url,
         signatureUrl: profile?.signature_url,
         companyName: profile?.company_name,
+        companyAddress: profile?.company_address,
+        companyPhone: profile?.company_phone,
+        companyEmail: profile?.company_email,
+        companyWebsite: profile?.company_website,
+        refNumber: profile?.company_ref_prefix
+          ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+          : undefined,
       },
     });
   } catch (error) {

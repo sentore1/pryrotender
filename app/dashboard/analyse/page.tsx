@@ -19,22 +19,46 @@ async function downloadProposalDocx(
   filename: string,
   logoUrl?: string,
   signatureUrl?: string,
-  companyName?: string
+  companyName?: string,
+  companyAddress?: string,
+  companyPhone?: string,
+  companyEmail?: string,
+  companyWebsite?: string,
+  refNumber?: string,
 ) {
   const lines = content.split('\n');
   const children: Paragraph[] = [];
 
-  // Logo at top
+  // Header: logo + company info side by side
+  const headerInfoLines: string[] = [
+    companyName || '',
+    companyAddress || '',
+    companyPhone || '',
+    companyEmail || '',
+    companyWebsite || '',
+    refNumber ? `Ref: ${refNumber}` : '',
+    `Date: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+  ].filter(Boolean);
+
   if (logoUrl) {
     const buf = await urlToBuffer(logoUrl);
     if (buf) {
       children.push(new Paragraph({
         alignment: AlignmentType.LEFT,
-        children: [new ImageRun({ data: buf, transformation: { width: 120, height: 40 }, type: 'png' })],
-        spacing: { after: 200 },
+        children: [new ImageRun({ data: buf, transformation: { width: 130, height: 45 }, type: 'png' })],
+        spacing: { after: 80 },
       }));
     }
   }
+
+  for (const info of headerInfoLines) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: info, size: 20, bold: info === companyName })],
+      spacing: { after: 40 },
+    }));
+  }
+
+  children.push(new Paragraph({ text: '─'.repeat(60), spacing: { after: 200 } }));
 
   for (const line of lines) {
     if (line.startsWith('## ')) children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2 }));
@@ -52,7 +76,7 @@ async function downloadProposalDocx(
     }
   }
 
-  // Signature/stamp at bottom
+  // Footer: company name + stamp/signature
   children.push(new Paragraph({ text: '', spacing: { before: 400 } }));
   if (companyName) {
     children.push(new Paragraph({
@@ -79,6 +103,11 @@ type ProposalData = {
   logoUrl?: string;
   signatureUrl?: string;
   companyName?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  companyWebsite?: string;
+  refNumber?: string;
 };
 
 export default function AnalyseTenderPage() {
@@ -143,6 +172,11 @@ export default function AnalyseTenderPage() {
           logoUrl: data.profile?.logoUrl,
           signatureUrl: data.profile?.signatureUrl,
           companyName: data.profile?.companyName,
+          companyAddress: data.profile?.companyAddress,
+          companyPhone: data.profile?.companyPhone,
+          companyEmail: data.profile?.companyEmail,
+          companyWebsite: data.profile?.companyWebsite,
+          refNumber: data.profile?.refNumber,
         });
         setView('proposal');
       } else {
@@ -246,7 +280,7 @@ export default function AnalyseTenderPage() {
               <div className="flex gap-2">
                 <button onClick={() => navigator.clipboard.writeText(proposal.content)} className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50">Copy</button>
                 <button
-                  onClick={() => downloadProposalDocx(proposal.content, `proposal_${tenderFilename}.docx`, proposal.logoUrl, proposal.signatureUrl, proposal.companyName)}
+                  onClick={() => downloadProposalDocx(proposal.content, `proposal_${tenderFilename}.docx`, proposal.logoUrl, proposal.signatureUrl, proposal.companyName, proposal.companyAddress, proposal.companyPhone, proposal.companyEmail, proposal.companyWebsite, proposal.refNumber)}
                   className="text-xs bg-blue-600 text-white hover:bg-blue-700 px-3 py-1.5 rounded-lg font-semibold">
                   ↓ Download DOCX
                 </button>

@@ -16,10 +16,30 @@ function isValidKey(key: string) {
 async function extractTextFromScannedPDF(buffer: Buffer, apiKey: string): Promise<string> {
   try {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
+    await import('pdfjs-dist/legacy/build/pdf.worker.mjs' as any);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createCanvas } = require('canvas');
+    const { createCanvas, Image } = require('canvas');
 
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+    // Provide a NodeCanvasFactory so pdfjs uses node-canvas for all image ops
+    const NodeCanvasFactory = {
+      create(width: number, height: number) {
+        const canvas = createCanvas(width, height);
+        return { canvas, context: canvas.getContext('2d') };
+      },
+      reset(canvasAndCtx: any, width: number, height: number) {
+        canvasAndCtx.canvas.width = width;
+        canvasAndCtx.canvas.height = height;
+      },
+      destroy(canvasAndCtx: any) {
+        canvasAndCtx.canvas.width = 0;
+        canvasAndCtx.canvas.height = 0;
+      },
+    };
+
+    // Patch global Image so pdfjs inline image rendering works in Node
+    (global as any).Image = Image;
+
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), canvasFactory: NodeCanvasFactory });
     const pdf = await loadingTask.promise;
     const numPages = Math.min(pdf.numPages, 5);
     const pageTexts: string[] = [];
@@ -27,10 +47,9 @@ async function extractTextFromScannedPDF(buffer: Buffer, apiKey: string): Promis
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+      const canvasAndCtx = NodeCanvasFactory.create(viewport.width, viewport.height);
+      await page.render({ canvasContext: canvasAndCtx.context, viewport, canvasFactory: NodeCanvasFactory }).promise;
+      const base64 = canvasAndCtx.canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
       const res = await axios.post(
         GROQ_API_URL,
@@ -70,15 +89,21 @@ export async function POST(request: NextRequest) {
     if (!ALLOWED_TYPES.includes(file.type)) return NextResponse.json({ success: false, error: 'Invalid file type.' }, { status: 400 });
 
     let tenderText = '';
+    let extractionError = '';
     if (file.type === 'application/pdf') {
       const buffer = Buffer.from(await file.arrayBuffer());
       try {
+        process.env.PDF_PARSE_NO_NATIVE = '1';
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const mod = require('pdf-parse/lib/pdf-parse.js');
         const pdfParse = typeof mod === 'function' ? mod : (mod.default ?? mod);
         const parsed = await pdfParse(buffer);
         tenderText = parsed.text?.trim() || '';
-      } catch { /* fall through to vision */ }
+        console.log('pdf-parse extracted chars:', tenderText.length);
+      } catch (e: any) {
+        extractionError = e?.message || String(e);
+        console.error('pdf-parse error:', e);
+      }
 
       // Image-based PDF fallback: render pages as images and OCR via vision model
       if (!tenderText) {
@@ -90,7 +115,7 @@ export async function POST(request: NextRequest) {
       tenderText = await file.text();
     }
 
-    if (!tenderText.trim()) return NextResponse.json({ success: false, error: 'Could not extract text from file' }, { status: 400 });
+    if (!tenderText.trim()) return NextResponse.json({ success: false, error: `Could not extract text from file. Debug: ${extractionError}` }, { status: 400 });
 
     // Load profile using verified user.id (not from request body)
     let companyContext = '';

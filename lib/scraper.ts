@@ -1,5 +1,17 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import crypto from 'crypto';
+
+/** Generates a stable, deterministic ID from a tender's title and source.
+ *  Using a hash means the same tender always gets the same ID across cron runs,
+ *  which makes deduplication possible. */
+function stableId(source: string, title: string): string {
+  return crypto
+    .createHash('md5')
+    .update(`${source}::${title.toLowerCase().trim()}`)
+    .digest('hex')
+    .slice(0, 16);
+}
 
 export interface Tender {
   id: string;
@@ -80,7 +92,7 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
         
         if (title && title.length > 10) {
           tenders.push({
-            id: `jobinrwanda-${Date.now()}-${index}`,
+            id: stableId('jobinrwanda', title),
             title: title,
             category: 'Tender',
             deadline: deadline || 'Not specified',
@@ -121,7 +133,7 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
         
         if (title && title.length > 10 && !title.includes('Load data')) {
           tenders.push({
-            id: `umucyo-${Date.now()}-${index}`,
+            id: stableId('umucyo', title),
             title: title,
             category: tenderCategory || 'Tender',
             deadline: dateText || 'Not specified',
