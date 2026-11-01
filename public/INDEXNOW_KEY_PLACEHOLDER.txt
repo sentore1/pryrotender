@@ -1,0 +1,12 @@
+PLACEHOLDER — DO NOT SERVE THIS FILE.
+
+After setting INDEXNOW_KEY in your .env.local / Vercel environment variables,
+rename this file to {your-key-value}.txt and place that file in public/.
+
+The file content must be exactly the key value (no newline, no quotes):
+  echo -n "your-key-here" > public/your-key-here.txt
+
+Search engines will verify ownership by fetching:
+  https://tender.pryro.com/{your-key-here}.txt
+
+Generate a key at: https://www.indexnow.org/

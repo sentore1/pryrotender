@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/mail';
 import { scrapeTenders, Tender } from '@/lib/scraper';
+import { generateTenderSlug, generateUniqueSlug, submitIndexNow } from '@/lib/seo';
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('x-cron-secret');
@@ -40,14 +41,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ new: 0, sent: 0, message: 'No new tenders' });
   }
 
-  // 4. Persist new tenders into seen_tenders so we never re-notify for them
-  const rows = newTenders.map(t => ({
-    id: t.id,
-    title: t.title,
-    source: t.source,
-    url: t.url,
-    first_seen_at: new Date().toISOString(),
-  }));
+  // 4. Persist new tenders into seen_tenders so we never re-notify for them.
+  //    We also generate a stable slug and store all SEO-relevant fields.
+  const now = new Date().toISOString();
+  const year = new Date().getFullYear();
+
+  // Build a set of slugs already in the DB for this batch so we can detect
+  // collisions within the current scrape.
+  const baseSlugCounts: Record<string, number> = {};
+
+  const rows = newTenders.map(t => {
+    const baseSlug = generateTenderSlug(t.title, year);
+    baseSlugCounts[baseSlug] = (baseSlugCounts[baseSlug] ?? 0) + 1;
+    // If the same base slug appears more than once in this batch, use the
+    // collision-resistant version for all occurrences.
+    const slug = baseSlugCounts[baseSlug] > 1
+      ? generateUniqueSlug(t.title, t.id, year)
+      : baseSlug;
+
+    return {
+      id: t.id,
+      slug,
+      title: t.title,
+      organization: t.organization ?? null,
+      category: t.category ?? null,
+      location: t.location ?? 'Rwanda',
+      deadline: t.deadline ?? null,
+      source: t.source,
+      source_url: t.url,           // original source URL for attribution
+      url: t.url,                  // kept for backward compatibility
+      description: t.description ?? null,
+      first_seen_at: now,
+      updated_at: now,
+      is_active: true,
+    };
+  });
+
+  // Second pass: fix any slugs that collided within this batch
+  // (the first pass counted, this one assigns unique slugs to duplicates)
+  const slugsSeen = new Set<string>();
+  for (const row of rows) {
+    if (slugsSeen.has(row.slug)) {
+      row.slug = generateUniqueSlug(row.title, row.id, year);
+    }
+    slugsSeen.add(row.slug);
+  }
 
   const { error: insertError } = await db
     .from('seen_tenders')
@@ -56,6 +94,16 @@ export async function POST(req: NextRequest) {
   if (insertError) {
     console.error('Failed to persist seen_tenders:', insertError.message);
     // Don't abort — still send notifications, but log the issue
+  }
+
+  // 4b. Notify IndexNow of newly indexed tender pages (non-blocking)
+  const indexNowKey = process.env.INDEXNOW_KEY;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tender.pryro.com';
+  if (indexNowKey) {
+    const tenderUrls = rows.map(r => `${appUrl}/tenders/${r.slug}`);
+    submitIndexNow(tenderUrls, appUrl, indexNowKey).catch(err =>
+      console.error('IndexNow submission failed:', err)
+    );
   }
 
   // 5. Load all active users who have notifications enabled
@@ -98,16 +146,22 @@ export async function POST(req: NextRequest) {
 
     const subject = `${matched.length} new tender${matched.length > 1 ? 's' : ''} matching your preferences`;
 
-    const tenderRows = matched.slice(0, 10).map(t =>
-      `<tr>
+    const tenderRows = matched.slice(0, 10).map(t => {
+      // Find the stored row to get the slug (for the public URL)
+      const storedRow = rows.find(r => r.id === t.id);
+      const tenderUrl = storedRow?.slug
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/tenders/${storedRow.slug}`
+        : t.url;
+
+      return `<tr>
         <td style="padding:10px 8px;border-bottom:1px solid #eee">
-          <a href="${t.url}" style="font-weight:bold;color:#2563eb;text-decoration:none">${t.title}</a><br/>
+          <a href="${tenderUrl}" style="font-weight:bold;color:#2563eb;text-decoration:none">${t.title}</a><br/>
           <span style="color:#666;font-size:12px">
             ${t.organization || t.source} · Deadline: ${t.deadline}
           </span>
         </td>
-      </tr>`
-    ).join('');
+      </tr>`;
+    }).join('');
 
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">

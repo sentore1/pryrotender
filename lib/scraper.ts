@@ -170,14 +170,13 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
     
     return tenders;
   } catch (error) {
+    // Never throw to the caller — a scraping failure should degrade gracefully,
+    // not crash the RSC stream and break navigation to other routes.
     console.error('Error scraping tenders:', error);
     if (axios.isAxiosError(error)) {
-      console.error('Axios error:', error.message);
-      if (error.response) {
-        console.error('Response status:', error.response.status);
-      }
+      console.error('Axios error:', error.message, error.response?.status);
     }
-    throw new Error('Failed to fetch tenders. Please try again later.');
+    return [];
   }
 }
 
