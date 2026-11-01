@@ -37,8 +37,8 @@ function LoginForm() {
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <form onSubmit={handleLogin} className="bg-white rounded shadow-sm border border-gray-100 p-6 space-y-4">
-          <div className="text-center mb-2">
-            <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
+          <div className="mb-2">
+            <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain" /></Link>
             <h1 className="text-lg font-bold text-gray-900 mt-3">Welcome back</h1>
             <p className="text-xs text-gray-500 mt-0.5">Sign in to your account</p>
           </div>

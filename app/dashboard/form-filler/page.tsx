@@ -315,14 +315,14 @@ export default function FormFillerPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-6 py-4 shrink-0">
-        <div className="flex items-center justify-between">
+      <header className="bg-white border-b border-gray-100 px-4 md:px-6 py-4 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-sm font-bold text-gray-900">Form Filler</h1>
             <p className="text-xs text-gray-400 mt-0.5">Upload a PDF form — AI fills it using your company profile</p>
           </div>
           {/* Tab pills */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg self-start sm:self-auto">
             {(['smart', 'pdf'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all capitalize

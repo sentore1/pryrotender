@@ -262,10 +262,36 @@ function DashboardContent() {
   const fetchTenders = async (cat: string) => {
     setLoading(true); setError(''); setSelectedTender(null); setProposal('');
     try {
-      const res = await fetch('/api/tenders?category=' + encodeURIComponent(cat));
+      // Category strings from the sidebar can be multi-word (e.g. "IT Technology Software").
+      // The scraper matches a single keyword, so use only the first word for the API call,
+      // then client-side filter the results to include any tender matching ANY of the keywords.
+      const keywords = cat.trim() ? cat.trim().split(/\s+/) : [];
+      const primaryKeyword = keywords[0] ?? '';
+
+      const res = await fetch('/api/tenders?category=' + encodeURIComponent(primaryKeyword));
       const data = await res.json();
-      if (data.success) { setTenders(data.tenders); if (!data.tenders.length) setError('No tenders found.'); }
-      else { setError(data.error || 'Failed.'); setTenders([]); }
+      if (data.success) {
+        let results = data.tenders;
+        // If there are additional keywords, also fetch them and merge (dedupe by id)
+        if (keywords.length > 1) {
+          const extras = await Promise.all(
+            keywords.slice(1).map(kw =>
+              fetch('/api/tenders?category=' + encodeURIComponent(kw))
+                .then(r => r.json())
+                .then(d => d.success ? d.tenders : [])
+                .catch(() => [])
+            )
+          );
+          const seen = new Set(results.map((t: Tender) => t.id));
+          for (const batch of extras) {
+            for (const t of batch) {
+              if (!seen.has(t.id)) { seen.add(t.id); results = [...results, t]; }
+            }
+          }
+        }
+        setTenders(results);
+        if (!results.length) setError('No tenders found.');
+      } else { setError(data.error || 'Failed.'); setTenders([]); }
     } catch { setError('Network error.'); setTenders([]); }
     finally { setLoading(false); }
   };
@@ -375,6 +401,7 @@ function DashboardContent() {
       <header className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-4 shrink-0">
         <div className="flex-1 relative max-w-md">
           <input type="text" placeholder="Search tenders..." value={searchInput}
+            data-tour="tender-search"
             onChange={e => setSearchInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchTenders(searchInput)}
             className="w-full pl-4 pr-4 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
@@ -405,7 +432,7 @@ function DashboardContent() {
           ) : (
             <>
               {open.length > 0 && (
-                <section className="mb-8">
+                <section className="mb-8" data-tour="tender-list">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">Open</span>
                     <span className="text-xs font-bold text-gray-400">{open.length}</span>
@@ -429,7 +456,7 @@ function DashboardContent() {
           )}
         </div>
         {/* Desktop proposal panel */}
-        <aside style={{ width: selectedTender ? panelWidth : 420 }} className="hidden md:flex shrink-0 bg-white border-l border-gray-100 flex-col overflow-hidden relative">
+        <aside data-tour="proposal-panel" style={{ width: selectedTender ? panelWidth : 420 }} className="hidden md:flex shrink-0 bg-white border-l border-gray-100 flex-col overflow-hidden relative">
           <div onMouseDown={startResize} className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400 z-10" />
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-800">Generated Proposal</h2>

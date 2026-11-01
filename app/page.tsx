@@ -1,8 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { TendersBrowser, TendersBrowserSkeleton } from '@/components/TendersBrowser';
+import LandingTendersBrowser from '@/components/LandingTendersBrowser';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tender.pryro.com';
 
@@ -190,22 +189,27 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Live Tenders — full browse UI (same as /tenders) */}
+      {/* Live Tenders — client-side filterable, no redirect */}
       <section id="tenders" className="bg-white">
-        <Suspense fallback={<TendersBrowserSkeleton />}>
-          <TendersBrowser page={1} query="" category="" basePath="/tenders" />
-        </Suspense>
+        <LandingTendersBrowser />
       </section>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-8 text-center text-xs text-gray-400">
-        <p suppressHydrationWarning>© {new Date().getFullYear()} PryroTender. All rights reserved.</p>
-        <div className="flex items-center justify-center gap-4 mt-2 flex-wrap">
-          <Link href="/tenders" className="hover:text-gray-600 transition">All Tenders</Link>
-          <Link href="/tenders/category/government" className="hover:text-gray-600 transition">Government Tenders</Link>
-          <Link href="/tenders/category/ict-software" className="hover:text-gray-600 transition">ICT Tenders</Link>
-          <Link href="/register" className="hover:text-gray-600 transition">Register</Link>
-          <a href="mailto:hello@pryro.com" className="hover:text-gray-600 transition">Contact</a>
+      <footer className="bg-white border-t border-gray-100 py-10 px-5 md:px-12">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start justify-between gap-8">
+          {/* Left — logo + copyright */}
+          <div className="flex flex-col gap-3">
+            <span className="font-black text-gray-200 leading-none tracking-tight select-none" style={{fontSize:'12rem'}}>pryro</span>
+            <p className="text-xs text-gray-400 mt-6" suppressHydrationWarning>© {new Date().getFullYear()} PryroTender. All rights reserved.</p>
+          </div>
+          {/* Right — links */}
+          <div className="flex flex-col gap-2 text-xs text-gray-400 text-right justify-end self-end mb-8">
+            <Link href="/tenders" className="hover:text-gray-600 transition">All Tenders</Link>
+            <Link href="/tenders/category/government" className="hover:text-gray-600 transition">Government Tenders</Link>
+            <Link href="/tenders/category/ict-software" className="hover:text-gray-600 transition">ICT Tenders</Link>
+            <Link href="/register" className="hover:text-gray-600 transition">Register</Link>
+            <a href="mailto:hello@pryro.com" className="hover:text-gray-600 transition">Contact</a>
+          </div>
         </div>
       </footer>
     </div>

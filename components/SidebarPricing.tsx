@@ -47,7 +47,7 @@ export default function SidebarPricing() {
   const price = currency === 'RWF' ? plan.rwf : plan.usd;
 
   return (
-    <div className="overflow-hidden shadow-md border border-gray-100" style={{ borderRadius: 6 }}>
+    <div className="overflow-hidden shadow-md border border-gray-100" style={{ borderRadius: 4 }}>
       {/* Header */}
       <div className="bg-blue-600 px-4 pt-4 pb-3">
         <p className="text-xs font-bold text-white text-center tracking-wide uppercase mb-3">
@@ -55,7 +55,7 @@ export default function SidebarPricing() {
         </p>
 
         {/* Plan tabs */}
-        <div className="flex bg-blue-700 p-0.5 gap-0.5" style={{ borderRadius: 6 }}>
+        <div className="flex bg-blue-700 p-0.5 gap-0.5" style={{ borderRadius: 4 }}>
           {(Object.keys(PLANS) as Tab[]).map((t) => (
             <button
               key={t}
@@ -65,7 +65,7 @@ export default function SidebarPricing() {
                   ? 'bg-white text-gray-900 shadow'
                   : 'text-blue-200 hover:text-white'
               }`}
-              style={{ borderRadius: 5 }}
+              style={{ borderRadius: 4 }}
             >
               {PLANS[t].label}
               {t === 'annual' && (
@@ -79,7 +79,7 @@ export default function SidebarPricing() {
       {/* Price block */}
       <div className="bg-white px-4 py-4 border-b border-gray-100">
         {/* Currency toggle */}
-        <div className="flex bg-gray-100 p-0.5 gap-0.5 mb-3 w-fit mx-auto" style={{ borderRadius: 6 }}>
+        <div className="flex bg-gray-100 p-0.5 gap-0.5 mb-3 w-fit mx-auto" style={{ borderRadius: 4 }}>
           {(['RWF', 'USD'] as Currency[]).map((c) => (
             <button
               key={c}
@@ -89,7 +89,7 @@ export default function SidebarPricing() {
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
-              style={{ borderRadius: 5 }}
+              style={{ borderRadius: 4 }}
             >
               {c}
             </button>
@@ -133,7 +133,7 @@ export default function SidebarPricing() {
         <Link
           href={plan.href}
           className="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition"
-          style={{ borderRadius: 6 }}
+          style={{ borderRadius: 4 }}
         >
           Get Started →
         </Link>

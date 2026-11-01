@@ -430,16 +430,16 @@ export default function ProposalsPage() {
         {!loading && proposals.length > 0 && !selected && (
           <div className="space-y-3">
             {proposals.map(p => (
-              <div key={p.id} className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.10)] rounded-[4px] p-4 flex items-center justify-between gap-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition">
+              <div key={p.id} className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.10)] rounded-[4px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-800 truncate">{p.tender_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 shrink-0">
                   <button onClick={() => setSelected(p)}
-                    className="text-xs px-3 py-1.5 text-gray-800 font-semibold rounded hover:bg-gray-100">
+                    className="text-xs px-3 py-1.5 text-gray-800 font-semibold rounded hover:bg-gray-100 border border-gray-200">
                     View
                   </button>
                   <button onClick={() => downloadDocx(p.content, `proposal_${p.tender_name.replace(/\s+/g, '_')}.docx`)}
@@ -462,7 +462,7 @@ export default function ProposalsPage() {
 
         {selected && (
           <div className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.10)] rounded-[4px] p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <button onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-700 mb-1">← Back to list</button>
                 <p className="text-sm font-bold text-gray-800">{selected.tender_name}</p>
@@ -470,9 +470,9 @@ export default function ProposalsPage() {
                   {new Date(selected.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => navigator.clipboard.writeText(selected.content)}
-                  className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50">
+                  className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">
                   Copy
                 </button>
                 <button onClick={() => downloadDocx(selected.content, `proposal_${selected.tender_name.replace(/\s+/g, '_')}.docx`)}

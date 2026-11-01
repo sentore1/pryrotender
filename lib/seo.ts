@@ -139,14 +139,14 @@ export const CATEGORY_SLUGS: Record<string, string> = {
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  'ict-software': 'ICT & Software',
-  'construction': 'Construction & Infrastructure',
-  'consultancy': 'Consultancy & Advisory',
-  'goods-supply': 'Goods & Supply',
-  'medical-health': 'Medical & Health',
-  'ngo-development': 'NGO & Development',
-  'government': 'Government Tenders',
-  'private-sector': 'Private Sector',
+  'ict-software': 'Software',
+  'construction': 'Construction',
+  'consultancy': 'Consultancy',
+  'goods-supply': 'Goods',
+  'medical-health': 'Medical',
+  'ngo-development': 'NGO',
+  'government': 'Government',
+  'private-sector': 'Private',
 };
 
 export const CATEGORY_DESCRIPTIONS: Record<string, string> = {

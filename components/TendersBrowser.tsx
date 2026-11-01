@@ -87,7 +87,10 @@ function TenderCard({ row }: { row: TenderRow }) {
   const isClosingSoon = status === 'closing_soon';
 
   const card = (
-    <div className={`bg-white rounded-lg p-4 flex flex-col gap-2.5 shadow-md hover:shadow-lg transition ${isExpired ? 'opacity-70' : ''}`}>
+    <div
+      className={`bg-white rounded-lg p-4 flex flex-col gap-2.5 transition ${isExpired ? 'opacity-70' : ''}`}
+      style={{ boxShadow: '0 -4px 8px -2px rgba(0,0,0,0.08), 4px 0 8px -2px rgba(0,0,0,0.08), -4px 0 8px -2px rgba(0,0,0,0.08)' }}
+    >
       {/* Top row */}
       <div className="flex items-center gap-2 flex-wrap">
         {isExpired ? (
@@ -118,8 +121,9 @@ function TenderCard({ row }: { row: TenderRow }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1 border-t border-gray-100 mt-auto">
-        <span className={`text-xs ${isExpired ? 'text-red-500' : isClosingSoon ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
-          {isExpired ? 'Closed: ' : 'Deadline: '}{formatDeadline(row.deadline ?? 'Not specified')}
+        <span className={`text-xs flex flex-col ${isExpired ? 'text-red-500' : isClosingSoon ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
+          <span>{isExpired ? 'Closed:' : 'Deadline:'}</span>
+          <span>{formatDeadline(row.deadline ?? 'Not specified')}</span>
         </span>
         {row.slug ? (
           <span className="text-xs font-semibold text-blue-600">View details</span>
@@ -226,8 +230,8 @@ export async function TendersBrowser({
                 name="q"
                 defaultValue={query}
                 placeholder="e.g. ICT, construction…"
-                className="w-full border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-400"
-                style={{ borderRadius: 0 }}
+                className="w-full border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-400 bg-gray-100"
+                style={{ borderRadius: 6 }}
               />
               {category && <input type="hidden" name="category" value={category} />}
               <button type="submit" className="mt-2 w-full py-1.5 bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition" style={{ borderRadius: 0 }}>
@@ -239,10 +243,10 @@ export async function TendersBrowser({
           {/* Category filter */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Category</p>
-            <nav className="space-y-1">
+            <nav className="space-y-1 border-l-2 border-gray-200 pl-3">
               <Link
                 href={basePath}
-                className={`block text-sm px-2 py-1.5 rounded transition ${!category ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`block text-sm py-1 transition ${!category ? 'text-blue-600 font-semibold border-l-2 border-blue-600 -ml-[14px] pl-3' : 'text-gray-600 hover:text-gray-900'}`}
               >
                 All Tenders
               </Link>
@@ -250,7 +254,7 @@ export async function TendersBrowser({
                 <Link
                   key={slug}
                   href={`${basePath}/category/${slug}`}
-                  className="block text-sm px-2 py-1.5 rounded text-gray-600 hover:bg-gray-50 transition"
+                  className="block text-sm py-1 text-gray-600 hover:text-gray-900 transition"
                 >
                   {label}
                 </Link>

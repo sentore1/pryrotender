@@ -137,9 +137,9 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       let logo = logoUrl, sig = sigUrl;
-      if (logoFile) logo = await uploadFile(logoFile, `${userId}/logo`);
-      if (sigFile) sig = await uploadFile(sigFile, `${userId}/signature`);
-      const { error } = await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig }).eq('id', userId);
+      if (logoFile) logo = await uploadFile(logoFile, `${userIdRef.current}/logo`);
+      if (sigFile) sig = await uploadFile(sigFile, `${userIdRef.current}/signature`);
+      const { error } = await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig }).eq('id', userIdRef.current);
       if (error) throw error;
       setLogoUrl(logo); setSigUrl(sig); setLogoFile(null); setSigFile(null);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
@@ -151,7 +151,7 @@ export default function SettingsPage() {
 
   const saveNotifications = async () => {
     setSaving(true);
-    await supabase.from('notification_preferences').upsert({ user_id: userId, ...notif, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    await supabase.from('notification_preferences').upsert({ user_id: userIdRef.current, ...notif, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     setSaving(false);
   };
@@ -179,7 +179,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/notifications/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.NEXT_PUBLIC_CRON_SECRET || '' },
-        body: JSON.stringify({ test: true, userId }),
+        body: JSON.stringify({ test: true, userId: userIdRef.current }),
       });
       const data = await res.json();
       setTestResult(data.sent > 0 || data.success ? '✓ Test email sent!' : 'No matching tenders found.');
@@ -194,7 +194,7 @@ export default function SettingsPage() {
     const provider = emailSettings.provider;
     const isGmail = provider === 'gmail';
     return supabase.from('email_settings').upsert({
-      user_id: userId,
+      user_id: userIdRef.current,
       provider,
       smtp_host: isGmail ? 'smtp.gmail.com' : emailSettings.smtp_host.trim(),
       smtp_port: Number(emailSettings.smtp_port) || (isGmail ? 465 : 587),
@@ -246,7 +246,7 @@ export default function SettingsPage() {
 
   const saveProposal = async () => {
     setSaving(true);
-    await supabase.from('profiles').update({ company_bio: bio, required_documents: requiredDocs, former_clients: formerClients }).eq('id', userId);
+    await supabase.from('profiles').update({ company_bio: bio, required_documents: requiredDocs, former_clients: formerClients }).eq('id', userIdRef.current);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     setSaving(false);
   };
@@ -326,15 +326,15 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <nav className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+      <nav className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center justify-between">
         <Image src="/logo.png" alt="PryroTender" width={110} height={36} className="object-contain" />
         <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-800">← Back to Dashboard</Link>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-6 py-8">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           {(['company', 'proposal', 'notifications', 'email', 'sidebar', 'subscription', 'employees'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
@@ -563,7 +563,7 @@ export default function SettingsPage() {
             {/* Custom SMTP only */}
             {emailSettings.provider === 'smtp' && (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium text-gray-600 block mb-1">SMTP Host</label>
                     <input type="text" value={emailSettings.smtp_host} onChange={e => setEmailSettings(s => ({ ...s, smtp_host: e.target.value }))}
@@ -640,7 +640,7 @@ export default function SettingsPage() {
             <div>
               <h2 className="font-semibold text-gray-800 mb-1">Former Clients</h2>
               <p className="text-xs text-gray-400 mb-3">Add past clients and projects. The AI will reference these to strengthen your proposals.</p>
-              <div className="flex gap-2 mb-3">
+              <div className="flex flex-col sm:flex-row gap-2 mb-3">
                 <input type="text" value={clientInput.name} onChange={e => setClientInput(c => ({ ...c, name: e.target.value }))}
                   placeholder="Client name" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <input type="text" value={clientInput.project} onChange={e => setClientInput(c => ({ ...c, project: e.target.value }))}
@@ -750,7 +750,7 @@ export default function SettingsPage() {
               <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">
                 {profile?.subscription_status === 'active' ? 'Upgrade or Change Plan' : 'Choose a Plan'}
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Monthly */}
                 <div className={`border-2 rounded-xl p-4 space-y-3 transition ${profile?.subscription_plan === 'monthly' && profile?.subscription_status === 'active' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
                   <div>
@@ -885,7 +885,7 @@ export default function SettingsPage() {
                               <p className="text-xs text-blue-600 font-medium">{emp.role || 'No role'}</p>
                               {emp.experience_years && <p className="text-xs text-gray-400">{emp.experience_years} years experience</p>}
                             </div>
-                            <div className="flex gap-2 shrink-0">
+                            <div className="flex flex-wrap gap-2 shrink-0">
                               <button onClick={() => setEditingEmp({ ...(emp as any), _id: emp.id })}
                                 className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Edit</button>
                               <a href={emp.cv_url} target="_blank" rel="noopener noreferrer"
