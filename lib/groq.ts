@@ -1,6 +1,5 @@
-import axios from 'axios';
+import { callGroq, hasGroqKey } from '@/lib/groq-client';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'qwen/qwen3.8-27b';
 
 export async function generateProposal(
@@ -8,9 +7,7 @@ export async function generateProposal(
   requirements: string,
   companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string; bio?: string; requiredDocuments?: string[]; formerClients?: { name: string; project: string }[] }
 ): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-
-  if (!apiKey || apiKey === 'your_groq_api_key_here') {
+  if (!hasGroqKey()) {
     return generateMockProposal(tenderDetails, requirements, companyInfo);
   }
 
@@ -105,22 +102,12 @@ Reaffirm commitment, top 5 competitive advantages, call to action.
 Write formally and persuasively with Rwanda-specific context. Every table must be properly formatted markdown.`;
 
   try {
-    const response = await axios.post(
-      GROQ_API_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 8000,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    return response.data.choices[0].message.content;
+    return await callGroq({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 8000,
+    });
   } catch (error) {
     console.error('Error calling Groq API:', error);
     return generateMockProposal(tenderDetails, requirements, companyInfo);

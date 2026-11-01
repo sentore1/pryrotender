@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
-import { timingSafeEqual } from 'crypto';
+import { callGroq, hasGroqKey } from '@/lib/groq-client';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function isValidKey(key: string) {
-  const placeholder = 'your_groq_api_key_here';
-  if (key.length !== placeholder.length) return key.length > 10;
-  try { return !timingSafeEqual(Buffer.from(key), Buffer.from(placeholder)); } catch { return true; }
-}
 
 // ─── Auth ────────────────────────────────────────────────────────────────
 function extractToken(request: NextRequest): string | null {
@@ -77,8 +69,7 @@ export async function POST(request: NextRequest) {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf) return NextResponse.json({ success: false, error: 'Please upload a PDF.' }, { status: 400 });
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || !isValidKey(apiKey)) return NextResponse.json({ success: false, error: 'AI not configured' }, { status: 500 });
+    if (!hasGroqKey()) return NextResponse.json({ success: false, error: 'AI not configured' }, { status: 500 });
 
     // Load profile — user client first, service role fallback
     let { data: profile } = await sb.from('profiles')
@@ -166,13 +157,11 @@ ${formText.slice(0, 14000)}
 
 JSON array only:`;
 
-    const res = await axios.post(
-      GROQ_API_URL,
-      { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 4000 },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+    const content = await callGroq(
+      { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 4000 }
     );
 
-    const raw = res.data.choices[0].message.content.trim()
+    const raw = content.trim()
       .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
     let fields: any[] = [];

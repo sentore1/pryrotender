@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import { supabase } from '@/lib/supabase';
-import { timingSafeEqual } from 'crypto';
+import { callGroq, hasGroqKey } from '@/lib/groq-client';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent';
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-
-function isValidKey(key: string) {
-  const placeholder = 'your_groq_api_key_here';
-  if (key.length !== placeholder.length) return key.length > 10;
-  try { return !timingSafeEqual(Buffer.from(key), Buffer.from(placeholder)); } catch { return true; }
-}
 
 async function extractTextFromScannedPDF(buffer: Buffer): Promise<string> {
   const errors: string[] = [];
@@ -116,8 +109,7 @@ export async function POST(request: NextRequest) {
 
       // Image-based PDF fallback: render pages as images and OCR via vision model
       if (!tenderText) {
-        const apiKey = process.env.GROQ_API_KEY;
-        if (!apiKey || !isValidKey(apiKey)) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
+        if (!hasGroqKey()) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
         try {
           tenderText = await extractTextFromScannedPDF(buffer);
         } catch (ocrErr: any) {
@@ -142,8 +134,7 @@ export async function POST(request: NextRequest) {
     if (notif?.categories?.length) companyContext += `\nExpertise areas: ${notif.categories.join(', ')}`;
     if (notif?.keywords?.length) companyContext += `\nKeywords/specialties: ${notif.keywords.join(', ')}`;
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || !isValidKey(apiKey)) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
+    if (!hasGroqKey()) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
 
     const prompt = `You are a tender analysis expert. Analyse the following tender document and provide a structured assessment.
 
@@ -180,13 +171,14 @@ List all documents needed for this tender.
 ## Budget Estimate
 Rough budget range estimate if determinable.`;
 
-    const response = await axios.post(
-      GROQ_API_URL,
-      { model: 'qwen/qwen3.8-27b', messages: [{ role: 'user', content: prompt }], temperature: 0.4, max_tokens: 4000 },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
-    );
+    const analysis = await callGroq({
+      model: 'qwen/qwen3.8-27b',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.4,
+      max_tokens: 4000,
+    });
 
-    return NextResponse.json({ success: true, analysis: response.data.choices[0].message.content });
+    return NextResponse.json({ success: true, analysis });
   } catch (error: any) {
     console.error('Tender analysis error:', error);
     return NextResponse.json({ success: false, error: 'Failed to analyse tender' }, { status: 500 });

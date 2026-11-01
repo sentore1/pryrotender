@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
 import { supabaseAdmin } from '@/lib/supabase';
-import { timingSafeEqual } from 'crypto';
+import { callGroq, hasGroqKey } from '@/lib/groq-client';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function isValidKey(key: string) {
-  const placeholder = 'your_groq_api_key_here';
-  if (key.length !== placeholder.length) return key.length > 10;
-  try { return !timingSafeEqual(Buffer.from(key), Buffer.from(placeholder)); } catch { return true; }
-}
 
 async function extractText(pdfBytes: Buffer): Promise<string> {
   try {
@@ -37,8 +29,7 @@ export async function POST(request: NextRequest) {
     if (!isPdf)
       return NextResponse.json({ success: false, error: 'Please upload a PDF file.' }, { status: 400 });
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || !isValidKey(apiKey))
+    if (!hasGroqKey())
       return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
 
     const pdfBuffer = Buffer.from(await file.arrayBuffer());
@@ -62,13 +53,11 @@ No markdown, no explanation. Just the JSON object.
 CV TEXT:
 ${cvText.slice(0, 12000)}`;
 
-    const res = await axios.post(
-      GROQ_API_URL,
-      { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1000 },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+    const content = await callGroq(
+      { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1000 }
     );
 
-    const raw = res.data.choices[0].message.content.trim()
+    const raw = content.trim()
       .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
     let parsed: { name: string; role: string; bio: string; skills: string[]; experience_years: string } = {

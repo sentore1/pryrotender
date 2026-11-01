@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
-import { timingSafeEqual } from 'crypto';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { callGroq, hasGroqKey } from '@/lib/groq-client';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function isValidKey(key: string) {
-  const placeholder = 'your_groq_api_key_here';
-  if (key.length !== placeholder.length) return key.length > 10;
-  try { return !timingSafeEqual(Buffer.from(key), Buffer.from(placeholder)); } catch { return true; }
-}
 
 // ─── Auth: same robust token extraction as other routes ──────────────────
 function extractToken(request: NextRequest): string | null {
@@ -137,7 +129,7 @@ async function extractTextItems(pdfBytes: Buffer): Promise<TextItem[]> {
 
 // ─── Ask AI: map every [INSERT ...] placeholder → value ──────────────────
 async function getPlaceholderMap(
-  formText: string, profileBlock: string, apiKey: string,
+  formText: string, profileBlock: string,
 ): Promise<Record<string, string>> {
 
   const prompt = `You are filling a PDF form on behalf of a company. The form has placeholder tokens inside brackets like [INSERT COMPANY NAME], [Insert Organization / Business Name], [INSERT REF NUMBER], [Insert Date], etc.
@@ -157,13 +149,11 @@ ${formText.slice(0, 14000)}
 
 Return JSON only:`;
 
-  const res = await axios.post(
-    GROQ_API_URL,
-    { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 3000 },
-    { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+  const content = await callGroq(
+    { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 3000 }
   );
 
-  const raw = res.data.choices[0].message.content.trim()
+  const raw = content.trim()
     .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   try {
     return JSON.parse(raw);
@@ -175,7 +165,7 @@ Return JSON only:`;
 
 // ─── Fill AcroForm interactive fields ────────────────────────────────────
 async function fillAcroForm(
-  pdfDoc: PDFDocument, profileBlock: string, formText: string, apiKey: string,
+  pdfDoc: PDFDocument, profileBlock: string, formText: string,
 ): Promise<number> {
   const form   = pdfDoc.getForm();
   const fields = form.getFields();
@@ -196,13 +186,11 @@ ${fieldNames.join('\n')}
 
 JSON:`;
 
-  const res = await axios.post(
-    GROQ_API_URL,
-    { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 2000 },
-    { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+  const content = await callGroq(
+    { model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 2000 }
   );
 
-  const raw = res.data.choices[0].message.content.trim()
+  const raw = content.trim()
     .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   let fieldMap: Record<string, string> = {};
   try { fieldMap = JSON.parse(raw); } catch { /* skip */ }
@@ -338,8 +326,7 @@ export async function POST(request: NextRequest) {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf) return NextResponse.json({ success: false, error: 'Please upload a PDF file.' }, { status: 400 });
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || !isValidKey(apiKey)) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
+    if (!hasGroqKey()) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
 
     const pdfBuffer = Buffer.from(await file.arrayBuffer());
 
@@ -387,8 +374,8 @@ export async function POST(request: NextRequest) {
 
     // Run both AI calls in parallel
     const [acroFilled, placeholderMap] = await Promise.all([
-      fillAcroForm(pdfDoc, profileBlock, formText, apiKey),
-      getPlaceholderMap(formText || textItems.map(i => i.text).join(' '), profileBlock, apiKey),
+      fillAcroForm(pdfDoc, profileBlock, formText),
+      getPlaceholderMap(formText || textItems.map(i => i.text).join(' '), profileBlock),
     ]);
 
     console.log('[fill-form] acroFilled:', acroFilled, '| placeholderMap keys:', Object.keys(placeholderMap).length);
