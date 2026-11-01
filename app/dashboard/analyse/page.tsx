@@ -3,8 +3,142 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { FileUploadZone } from '@/components/FileUploadZone';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } from 'docx';
+import {
+  Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType,
+  Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
+} from 'docx';
 import { saveAs } from 'file-saver';
+
+const TNR = 'Times New Roman';
+const BODY_SIZE = 22;   // 11pt in half-points
+const H2_SIZE   = 26;   // 13pt
+const H3_SIZE   = 24;   // 12pt
+const BLACK     = '000000';
+
+/** Detect image type from ArrayBuffer magic bytes */
+function detectImageType(buf: ArrayBuffer): 'png' | 'jpg' | 'gif' | 'bmp' {
+  const bytes = new Uint8Array(buf.slice(0, 4));
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return 'png';
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8) return 'jpg';
+  if (bytes[0] === 0x47 && bytes[1] === 0x49) return 'gif';
+  return 'png'; // default
+}
+
+/**
+ * Get the natural pixel dimensions of an image from its ArrayBuffer.
+ * Returns { width, height } in pixels, or null if undetectable.
+ */
+async function getImageDimensions(buf: ArrayBuffer): Promise<{ width: number; height: number } | null> {
+  return new Promise(resolve => {
+    try {
+      const blob = new Blob([buf]);
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch { resolve(null); }
+  });
+}
+
+/**
+ * Scale image to fit within maxW × maxH while preserving aspect ratio.
+ * Returns { width, height } in pixels (for docx transformation).
+ */
+function scaleToFit(
+  naturalW: number,
+  naturalH: number,
+  maxW: number,
+  maxH: number,
+): { width: number; height: number } {
+  const ratio = Math.min(maxW / naturalW, maxH / naturalH);
+  return {
+    width:  Math.round(naturalW * ratio),
+    height: Math.round(naturalH * ratio),
+  };
+}
+
+/** Strip ALL markdown symbols: **, *, ##, ---  from a string */
+function stripAllMd(text: string): string {
+  return text
+    .replace(/\*\*([^*]*)\*\*/g, '$1')   // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')        // *italic* → italic
+    .replace(/^#{1,6}\s+/, '')            // ## heading
+    .replace(/^[-*]{3,}$/, '');           // --- or ***
+}
+
+/** Split a line on **bold** markers and return TextRun children, stripping all other * */
+function boldRuns(line: string, size = BODY_SIZE, color = BLACK): TextRun[] {
+  // Process **bold** pairs first, then strip every remaining lone *
+  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+  const runs: TextRun[] = [];
+  for (const p of parts) {
+    if (p.length === 0) continue;
+    if (p.startsWith('**') && p.endsWith('**') && p.length > 4) {
+      // Bold run — strip the markers
+      runs.push(new TextRun({ text: p.slice(2, -2), bold: true, size, color, font: TNR }));
+    } else {
+      // Plain run — strip ALL remaining * characters
+      const clean = p.replace(/\*/g, '');
+      if (clean.length > 0) {
+        runs.push(new TextRun({ text: clean, size, color, font: TNR }));
+      }
+    }
+  }
+  return runs.length > 0 ? runs : [new TextRun({ text: '', size, color, font: TNR })];
+}
+
+/** Detect whether a line is a markdown table pipe row */
+function isTableRow(line: string): boolean {
+  return line.trim().startsWith('|') && line.trim().endsWith('|');
+}
+
+/** Detect separator row: |---|---| */
+function isSeparatorRow(line: string): boolean {
+  return isTableRow(line) && /^\|[\s:|-]+\|$/.test(line.trim());
+}
+
+/** Parse a markdown pipe table block into a docx Table */
+function buildDocxTable(tableLines: string[]): Table {
+  const dataRows = tableLines.filter(l => !isSeparatorRow(l));
+
+  const rows = dataRows.map((rowLine, rowIdx) => {
+    const cells = rowLine
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(cell => cell.trim());
+
+    return new TableRow({
+      children: cells.map(cellText =>
+        new TableCell({
+          borders: {
+            top:    { style: BorderStyle.SINGLE, size: 4, color: BLACK },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: BLACK },
+            left:   { style: BorderStyle.SINGLE, size: 4, color: BLACK },
+            right:  { style: BorderStyle.SINGLE, size: 4, color: BLACK },
+          },
+          shading: rowIdx === 0
+            ? { type: ShadingType.CLEAR, color: 'auto', fill: 'D9D9D9' }
+            : { type: ShadingType.CLEAR, color: 'auto', fill: 'FFFFFF' },
+          children: [new Paragraph({
+            children: boldRuns(cellText, 20, BLACK),
+            spacing: { before: 40, after: 40 },
+          })],
+        })
+      ),
+    });
+  });
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows,
+  });
+}
 
 async function urlToBuffer(url: string): Promise<ArrayBuffer | null> {
   try {
@@ -26,74 +160,168 @@ async function downloadProposalDocx(
   companyWebsite?: string,
   refNumber?: string,
 ) {
-  const lines = content.split('\n');
-  const children: Paragraph[] = [];
+  const children: (Paragraph | Table)[] = [];
 
-  // Header: logo + company info side by side
+  // ── HEADER: Logo only (full width, natural proportions) ─────
+  if (logoUrl) {
+    const buf = await urlToBuffer(logoUrl);
+    if (buf) {
+      const imgType = detectImageType(buf);
+      const natural = await getImageDimensions(buf);
+      const { width, height } = natural
+        ? scaleToFit(natural.width, natural.height, 200, 80)
+        : { width: 160, height: 60 };
+      children.push(new Paragraph({
+        alignment: AlignmentType.LEFT,
+        children: [new ImageRun({ data: buf, transformation: { width, height }, type: imgType })],
+        spacing: { after: 120 },
+      }));
+    }
+  }
+
+  // ── HEADER: Company info lines ───────────────────────────────
   const headerInfoLines: string[] = [
-    companyName || '',
+    companyName    || '',
     companyAddress || '',
-    companyPhone || '',
-    companyEmail || '',
+    companyPhone   || '',
+    companyEmail   || '',
     companyWebsite || '',
     refNumber ? `Ref: ${refNumber}` : '',
     `Date: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
   ].filter(Boolean);
 
-  if (logoUrl) {
-    const buf = await urlToBuffer(logoUrl);
-    if (buf) {
-      children.push(new Paragraph({
-        alignment: AlignmentType.LEFT,
-        children: [new ImageRun({ data: buf, transformation: { width: 130, height: 45 }, type: 'png' })],
-        spacing: { after: 80 },
-      }));
-    }
-  }
-
   for (const info of headerInfoLines) {
     children.push(new Paragraph({
-      children: [new TextRun({ text: info, size: 20, bold: info === companyName })],
+      children: [new TextRun({
+        text: info,
+        size: 20,
+        bold: info === companyName,
+        color: BLACK,
+        font: TNR,
+      })],
       spacing: { after: 40 },
     }));
   }
 
-  children.push(new Paragraph({ text: '─'.repeat(60), spacing: { after: 200 } }));
+  // Spacer before body — NO divider line
+  children.push(new Paragraph({ text: '', spacing: { after: 240 } }));
 
-  for (const line of lines) {
-    if (line.startsWith('## ')) children.push(new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2 }));
-    else if (line.startsWith('### ')) children.push(new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3 }));
-    else if (line.trim() === '') children.push(new Paragraph({ text: '' }));
-    else {
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      children.push(new Paragraph({
-        children: parts.map(p =>
-          p.startsWith('**') && p.endsWith('**')
-            ? new TextRun({ text: p.slice(2, -2), bold: true, size: 22 })
-            : new TextRun({ text: p, size: 22 })
-        ),
-      }));
+  // ── BODY ─────────────────────────────────────────────────────
+  const lines = content.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // ── Markdown table block ──
+    if (isTableRow(line)) {
+      const tableLines: string[] = [];
+      while (i < lines.length && (isTableRow(lines[i]) || isSeparatorRow(lines[i]))) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      if (tableLines.filter(l => !isSeparatorRow(l)).length > 0) {
+        children.push(buildDocxTable(tableLines));
+        children.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+      }
+      continue;
     }
+
+    // ── H2 heading (no underline) ──
+    if (line.startsWith('## ')) {
+      const text = stripAllMd(line.slice(3).trim());
+      children.push(new Paragraph({
+        children: [new TextRun({ text, bold: true, size: H2_SIZE, color: BLACK, font: TNR })],
+        spacing: { before: 320, after: 120 },
+      }));
+      i++; continue;
+    }
+
+    // ── H3 heading ──
+    if (line.startsWith('### ')) {
+      const text = stripAllMd(line.slice(4).trim());
+      children.push(new Paragraph({
+        children: [new TextRun({ text, bold: true, size: H3_SIZE, color: BLACK, font: TNR })],
+        spacing: { before: 200, after: 80 },
+      }));
+      i++; continue;
+    }
+
+    // ── Horizontal rule — skip entirely (no line rendered) ──
+    if (/^[-*]{3,}$/.test(line.trim())) {
+      children.push(new Paragraph({ text: '', spacing: { after: 80 } }));
+      i++; continue;
+    }
+
+    // ── Bullet point (* text or - text) ──
+    const bulletMatch = line.match(/^[*-]\s+(.+)/);
+    if (bulletMatch) {
+      children.push(new Paragraph({
+        bullet: { level: 0 },
+        children: boldRuns(bulletMatch[1]),
+        spacing: { after: 60 },
+      }));
+      i++; continue;
+    }
+
+    // ── Empty line ──
+    if (line.trim() === '') {
+      children.push(new Paragraph({ text: '', spacing: { after: 60 } }));
+      i++; continue;
+    }
+
+    // ── Regular paragraph ──
+    children.push(new Paragraph({
+      children: boldRuns(line),
+      spacing: { after: 80 },
+    }));
+    i++;
   }
 
-  // Footer: company name + stamp/signature
-  children.push(new Paragraph({ text: '', spacing: { before: 400 } }));
+  // ── FOOTER: company name + stamp (no divider line) ───────────
+  children.push(new Paragraph({ text: '', spacing: { before: 480 } }));
+
   if (companyName) {
     children.push(new Paragraph({
-      children: [new TextRun({ text: companyName, bold: true, size: 22 })],
+      children: [new TextRun({ text: companyName, bold: true, size: BODY_SIZE, color: BLACK, font: TNR })],
+      spacing: { after: 40 },
     }));
   }
+
+  children.push(new Paragraph({
+    children: [new TextRun({ text: 'Authorized Signatory', size: 20, color: BLACK, font: TNR })],
+    spacing: { after: 120 },
+  }));
+
   if (signatureUrl) {
     const buf = await urlToBuffer(signatureUrl);
     if (buf) {
+      const imgType = detectImageType(buf);
+      const natural = await getImageDimensions(buf);
+      const { width, height } = natural
+        ? scaleToFit(natural.width, natural.height, 200, 100)
+        : { width: 180, height: 80 };
       children.push(new Paragraph({
-        children: [new ImageRun({ data: buf, transformation: { width: 150, height: 60 }, type: 'png' })],
-        spacing: { before: 100 },
+        alignment: AlignmentType.LEFT,
+        children: [new ImageRun({ data: buf, transformation: { width, height }, type: imgType })],
+        spacing: { before: 60 },
       }));
     }
   }
 
-  const blob = await Packer.toBlob(new Document({ sections: [{ children }] }));
+  // ── BUILD AND SAVE ───────────────────────────────────────────
+  const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: { font: TNR, size: BODY_SIZE, color: BLACK },
+        },
+      },
+    },
+    sections: [{ children }],
+  });
+
+  const blob = await Packer.toBlob(doc);
   saveAs(blob, filename);
 }
 
@@ -111,7 +339,9 @@ type ProposalData = {
 };
 
 export default function AnalyseTenderPage() {
+  const [inputTab, setInputTab] = useState<'upload' | 'paste'>('upload');
   const [file, setFile] = useState<File | null>(null);
+  const [pastedText, setPastedText] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState('');
   const [error, setError] = useState('');
@@ -121,16 +351,29 @@ export default function AnalyseTenderPage() {
   const [proposal, setProposal] = useState<ProposalData | null>(null);
   const [view, setView] = useState<'analysis' | 'proposal'>('analysis');
 
-  const reset = () => { setFile(null); setAnalysis(''); setError(''); setChatInput(''); setProposal(null); setView('analysis'); };
+  const reset = () => {
+    setFile(null); setPastedText(''); setAnalysis(''); setError('');
+    setChatInput(''); setProposal(null); setView('analysis');
+  };
 
-  const handleAnalyse = async (f: File = file!) => {
-    if (!f) return;
+  const canAnalyse = inputTab === 'upload' ? !!file : pastedText.trim().length > 20;
+
+  const handleAnalyse = async (f: File | null = file) => {
+    if (!canAnalyse) return;
     setLoading(true); setError(''); setAnalysis(''); setProposal(null); setView('analysis');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const fd = new FormData();
-      fd.append('file', f);
+
+      if (inputTab === 'paste') {
+        // Wrap pasted text as a plain-text file blob
+        const blob = new Blob([pastedText], { type: 'text/plain' });
+        fd.append('file', blob, 'pasted_tender.txt');
+      } else {
+        fd.append('file', f!);
+      }
       if (user?.id) fd.append('userId', user.id);
+
       const res = await fetch('/api/analyse-tender', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.success) setAnalysis(data.analysis);
@@ -159,24 +402,51 @@ export default function AnalyseTenderPage() {
     setGenLoading(true); setError('');
     try {
       const tenderName = file?.name?.replace(/\.[^.]+$/, '') || 'Tender';
+
+      // Fetch profile client-side — we have a live session here, no cookie needed
+      const { data: { user } } = await supabase.auth.getUser();
+      let profileData: any = null;
+      let accessToken: string | undefined;
+
+      // Get the current session token to forward to the API
+      const { data: { session } } = await supabase.auth.getSession();
+      accessToken = session?.access_token;
+
+      if (user?.id) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('company_name,company_address,company_phone,company_email,company_website,company_ref_prefix,logo_url,signature_url')
+          .eq('id', user.id)
+          .single();
+        profileData = p;
+      }
+
       const res = await fetch('/api/generate-proposal-from-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ analysis, tenderName }),
       });
       const data = await res.json();
       if (data.success) {
+        const refNumber = profileData?.company_ref_prefix
+          ? `${profileData.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+          : undefined;
+
         setProposal({
           content: data.proposal,
           proposalId: data.proposalId,
-          logoUrl: data.profile?.logoUrl,
-          signatureUrl: data.profile?.signatureUrl,
-          companyName: data.profile?.companyName,
-          companyAddress: data.profile?.companyAddress,
-          companyPhone: data.profile?.companyPhone,
-          companyEmail: data.profile?.companyEmail,
-          companyWebsite: data.profile?.companyWebsite,
-          refNumber: data.profile?.refNumber,
+          // Prefer client-side profile (reliable) over API response
+          logoUrl: profileData?.logo_url || data.profile?.logoUrl,
+          signatureUrl: profileData?.signature_url || data.profile?.signatureUrl,
+          companyName: profileData?.company_name || data.profile?.companyName,
+          companyAddress: profileData?.company_address || data.profile?.companyAddress,
+          companyPhone: profileData?.company_phone || data.profile?.companyPhone,
+          companyEmail: profileData?.company_email || data.profile?.companyEmail,
+          companyWebsite: profileData?.company_website || data.profile?.companyWebsite,
+          refNumber: refNumber || data.profile?.refNumber,
         });
         setView('proposal');
       } else {
@@ -217,23 +487,57 @@ export default function AnalyseTenderPage() {
 
         {view === 'analysis' && (
           <>
-            <FileUploadZone
-              file={file}
-              accept=".pdf,.txt,.doc,.docx"
-              acceptLabel="PDF, TXT, DOC"
-              onFile={f => { setFile(f); setAnalysis(''); setError(''); setProposal(null); }}
-              onError={setError}
-            />
+            {/* Input tabs: Upload or Paste */}
+            {!analysis && (
+              <div className="mb-4">
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-4">
+                  {(['upload', 'paste'] as const).map(t => (
+                    <button key={t} onClick={() => setInputTab(t)}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all capitalize
+                        ${inputTab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      {t === 'upload' ? 'Upload File' : 'Paste Text'}
+                    </button>
+                  ))}
+                </div>
+
+                {inputTab === 'upload' && (
+                  <FileUploadZone
+                    file={file}
+                    accept=".pdf,.txt,.doc,.docx"
+                    acceptLabel="PDF, TXT, DOC"
+                    onFile={f => { setFile(f); setAnalysis(''); setError(''); setProposal(null); }}
+                    onError={setError}
+                  />
+                )}
+
+                {inputTab === 'paste' && (
+                  <div className="mb-4">
+                    <textarea
+                      value={pastedText}
+                      onChange={e => setPastedText(e.target.value)}
+                      placeholder="Paste the tender text here…"
+                      rows={10}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none placeholder:text-gray-400"
+                    />
+                    {pastedText.trim().length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1 text-right">{pastedText.trim().length} characters</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {error && <div className="mb-4 flex justify-end"><div className="px-4 py-3 bg-red-600 text-white rounded-lg text-sm font-medium inline-block">{error}</div></div>}
 
-            {file && !analysis && (
-              <button onClick={() => handleAnalyse()} disabled={loading}
-                className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm mb-4">
-                {loading
-                  ? <span className="flex items-center justify-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />Analysing...</span>
-                  : 'Analyse Tender'}
-              </button>
+            {canAnalyse && !analysis && (
+              <div className="flex justify-end mb-4">
+                <button onClick={() => handleAnalyse()} disabled={loading}
+                  className="flex items-center gap-2 px-5 py-2 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50 text-sm transition-colors">
+                  {loading
+                    ? <><span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />Analysing…</>
+                    : <><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>Analyse Tender</>}
+                </button>
+              </div>
             )}
 
             {analysis && (

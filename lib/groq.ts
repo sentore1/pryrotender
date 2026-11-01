@@ -46,13 +46,14 @@ Write a COMPREHENSIVE, FORMAL, PROFESSIONAL proposal (2500-3500 words). Use form
 
 STRICT FORMATTING RULES:
 - Do NOT use box-drawing characters anywhere
+- Do NOT use * for bullet points — use only hyphen (-) for all lists
 - Use only plain dashes (---) for section dividers
 - For ALL tables use this EXACT markdown pipe format with header separator row:
   | Column 1 | Column 2 | Column 3 |
   |----------|----------|----------|
   | Data     | Data     | Data     |
 - Use ## for section headings, ### for sub-headings
-- Use **bold** for key terms
+- Use **bold** for key terms only — do NOT start bullet lines with *
 
 REQUIRED SECTIONS:
 

@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'proposal' | 'subscription'>('company');
+  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'proposal' | 'subscription' | 'employees'>('company');
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -61,6 +61,17 @@ export default function SettingsPage() {
   const [formerClients, setFormerClients] = useState<{ name: string; project: string }[]>([]);
   const [clientInput, setClientInput] = useState({ name: '', project: '' });
 
+  // Employees / CVs
+  type Employee = { id: string; name: string; role: string; bio: string; skills: string[]; experience_years: string; cv_url: string };
+  const [employees, setEmployees]         = useState<Employee[]>([]);
+  const [cvFile, setCvFile]               = useState<File | null>(null);
+  const [cvUploading, setCvUploading]     = useState(false);
+  const [cvError, setCvError]             = useState('');
+  const [cvParsed, setCvParsed]           = useState<Omit<Employee,'id'|'cv_url'> | null>(null);
+  const [editingEmp, setEditingEmp]       = useState<Omit<Employee,'id'|'cv_url'> | null>(null);
+  const [pendingCvUrl, setPendingCvUrl]   = useState('');
+  const [pendingEmpId, setPendingEmpId]   = useState('');
+
   useEffect(() => {
     const loadData = async (uid: string) => {
       const { data: p } = await supabase.from('profiles').select('*').eq('id', uid).single();
@@ -78,6 +89,11 @@ export default function SettingsPage() {
       }
       const { data: n } = await supabase.from('notification_preferences').select('*').eq('user_id', uid).single();
       if (n) setNotif({ enabled: n.enabled, frequency: n.frequency, keywords: n.keywords || [], categories: n.categories || [], notification_email: n.notification_email || '', extra_emails: n.extra_emails || [] });
+
+      // Load employees
+      const { data: emps } = await supabase.from('employees').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+      if (emps) setEmployees(emps);
+
       setLoading(false);
     };
 
@@ -168,6 +184,41 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
+  // ── Employee CV functions ──────────────────────────────────────────────
+  const handleCvUpload = async (file: File) => {
+    setCvFile(file); setCvError(''); setCvParsed(null); setEditingEmp(null); setPendingCvUrl(''); setPendingEmpId('');
+    setCvUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('userId', userId);
+      const res  = await fetch('/api/employees/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        setEmployees(prev => [data.employee, ...prev]);
+        setCvFile(null);
+        setCvParsed(null);
+      } else {
+        setCvError(data.error || 'Upload failed.');
+      }
+    } catch { setCvError('Network error.'); }
+    setCvUploading(false);
+  };
+
+  const deleteEmployee = async (id: string) => {
+    if (!confirm('Remove this employee and their CV?')) return;
+    const res  = await fetch('/api/employees/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: id, userId }) });
+    const data = await res.json();
+    if (data.success) setEmployees(prev => prev.filter(e => e.id !== id));
+    else alert(data.error || 'Delete failed.');
+  };
+
+  const updateEmployee = async (emp: Employee) => {
+    await supabase.from('employees').update({ name: emp.name, role: emp.role, bio: emp.bio }).eq('id', emp.id);
+    setEmployees(prev => prev.map(e => e.id === emp.id ? emp : e));
+    setEditingEmp(null);
+  };
+
   useEffect(() => {
     if (tab !== 'sidebar' || umucyoCats.length) return;
     fetch('/api/categories').then(r => r.json()).then(d => {
@@ -210,7 +261,7 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="flex gap-2 mb-6">
-          {(['company', 'proposal', 'notifications', 'sidebar', 'subscription'] as const).map(t => (
+          {(['company', 'proposal', 'notifications', 'sidebar', 'subscription', 'employees'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
               {t}
@@ -224,8 +275,42 @@ export default function SettingsPage() {
             {[['company_name', 'Company Name'], ['company_address', 'Address'], ['company_phone', 'Phone'], ['company_email', 'Email'], ['company_website', 'Website'], ['company_ref_prefix', 'Reference Prefix (e.g. REF)']].map(([field, label]) => (
               <div key={field}>
                 <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-                <input type="text" value={(company as any)[field]} onChange={e => setCompany(c => ({ ...c, [field]: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={(company as any)[field]}
+                    onChange={e => setCompany(c => ({ ...c, [field]: e.target.value }))}
+                    onBlur={() => {
+                      // Auto-fill ref prefix when company name is set and prefix is still empty
+                      if (field === 'company_name') {
+                        const name = (company as any)['company_name'].trim();
+                        if (name && !company.company_ref_prefix.trim()) {
+                          const words = name.split(/\s+/);
+                          const prefix = words.length >= 2
+                            ? words.map((w: string) => w[0].toUpperCase()).join('')
+                            : name.slice(0, 4).toUpperCase();
+                          setCompany(c => ({ ...c, company_ref_prefix: prefix }));
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-24"
+                  />
+                  {field === 'company_ref_prefix' && (
+                    <button type="button"
+                      onClick={() => {
+                        const name = company.company_name.trim();
+                        if (!name) return;
+                        const words = name.split(/\s+/);
+                        const prefix = words.length >= 2
+                          ? words.map((w: string) => w[0].toUpperCase()).join('')
+                          : name.slice(0, 4).toUpperCase();
+                        setCompany(c => ({ ...c, company_ref_prefix: prefix }));
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-blue-600 font-medium hover:bg-blue-50 rounded transition-colors">
+                      Auto-generate
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             <div className="grid grid-cols-2 gap-4">
@@ -473,8 +558,10 @@ export default function SettingsPage() {
         )}
 
         {tab === 'subscription' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
             <h2 className="font-semibold text-gray-800">Subscription</h2>
+
+            {/* Current status */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
                 <p className="text-sm font-semibold text-gray-800">Current Plan</p>
@@ -487,9 +574,50 @@ export default function SettingsPage() {
             {profile?.subscription_end && (
               <p className="text-xs text-gray-500">Renews / Expires: <span className="font-medium text-gray-700">{profile.subscription_end}</span></p>
             )}
-            <Link href="/register?plan=monthly" className="block text-center py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm">
-              {profile?.subscription_status === 'active' ? 'Renew / Change Plan' : 'Subscribe Now'}
-            </Link>
+
+            {/* Plan cards */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">
+                {profile?.subscription_status === 'active' ? 'Upgrade or Change Plan' : 'Choose a Plan'}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Monthly */}
+                <div className={`border-2 rounded-xl p-4 space-y-3 transition ${profile?.subscription_plan === 'monthly' && profile?.subscription_status === 'active' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Monthly</p>
+                    <p className="text-xl font-bold text-gray-900 mt-0.5">100 RWF <span className="text-xs font-normal text-gray-400">/mo</span></p>
+                  </div>
+                  <ul className="space-y-1.5 text-xs text-gray-600">
+                    {['All tenders access','AI proposal generation','Analyse tender','Form Filler AI','DOCX export','Email notifications'].map(f => (
+                      <li key={f} className="flex items-center gap-1.5"><span className="text-green-500 font-bold">✓</span>{f}</li>
+                    ))}
+                  </ul>
+                  <Link href="/register?plan=monthly&currency=RWF"
+                    className="block text-center py-2 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">
+                    {profile?.subscription_plan === 'monthly' && profile?.subscription_status === 'active' ? 'Renew Monthly' : 'Get Monthly'}
+                  </Link>
+                </div>
+                {/* Annual */}
+                <div className={`border-2 rounded-xl p-4 space-y-3 transition relative ${profile?.subscription_plan === 'annual' && profile?.subscription_status === 'active' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">Best Value</span>
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Annual</p>
+                    <p className="text-xl font-bold text-gray-900 mt-0.5">100 RWF <span className="text-xs font-normal text-gray-400">/yr</span></p>
+                    <p className="text-xs text-green-600">Save 100 RWF vs monthly</p>
+                  </div>
+                  <ul className="space-y-1.5 text-xs text-gray-600">
+                    {['All tenders access','AI proposal generation','Analyse tender','Form Filler AI','DOCX export','Email notifications','Priority support'].map(f => (
+                      <li key={f} className="flex items-center gap-1.5"><span className="text-green-500 font-bold">✓</span>{f}</li>
+                    ))}
+                  </ul>
+                  <Link href="/register?plan=annual&currency=RWF"
+                    className="block text-center py-2 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">
+                    {profile?.subscription_plan === 'annual' && profile?.subscription_status === 'active' ? 'Renew Annual' : 'Get Annual'}
+                  </Link>
+                </div>
+              </div>
+            </div>
+
             {profile?.subscription_status === 'active' && (
               <button disabled={cancelling} onClick={async () => {
                 if (!confirm('Cancel your subscription? You will lose access at end of today.')) return;
@@ -521,6 +649,112 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {tab === 'employees' && (
+          <div className="space-y-6">
+            {/* Upload new CV */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h2 className="font-semibold text-gray-800">Add Employee CV</h2>
+              <p className="text-xs text-gray-400">Upload a PDF CV — AI will automatically extract the employee&apos;s name, role, and bio.</p>
+
+              {/* Drop zone */}
+              <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-8 cursor-pointer transition
+                ${cvUploading ? 'border-gray-300 bg-gray-50' : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'}`}>
+                <input type="file" accept=".pdf" className="hidden" disabled={cvUploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleCvUpload(f); e.target.value = ''; }} />
+                {cvUploading ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
+                    <p className="text-sm text-blue-600 font-medium">Uploading &amp; extracting CV…</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-gray-700">Drop CV here or click to upload</p>
+                    <p className="text-xs text-gray-400 mt-1">PDF only — max 10MB</p>
+                  </>
+                )}
+              </label>
+
+              {cvError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{cvError}</p>}
+            </div>
+
+            {/* Employee list */}
+            {employees.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+                <h2 className="font-semibold text-gray-800">Team CVs ({employees.length})</h2>
+                <div className="space-y-3">
+                  {employees.map(emp => (
+                    <div key={emp.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                      {editingEmp && (editingEmp as any)._id === emp.id ? (
+                        /* Edit mode */
+                        <div className="space-y-3">
+                          {[['name','Full Name'],['role','Job Title / Role'],['bio','Professional Bio']] .map(([field, label]) => (
+                            <div key={field}>
+                              <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
+                              {field === 'bio'
+                                ? <textarea rows={3} value={(editingEmp as any)[field]} onChange={e => setEditingEmp((prev: any) => ({ ...prev, [field]: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                                : <input type="text" value={(editingEmp as any)[field]} onChange={e => setEditingEmp((prev: any) => ({ ...prev, [field]: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                              }
+                            </div>
+                          ))}
+                          <div className="flex gap-2">
+                            <button onClick={() => updateEmployee({ ...emp, ...(editingEmp as any) })}
+                              className="flex-1 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition">Save Changes</button>
+                            <button onClick={() => setEditingEmp(null)}
+                              className="px-4 py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View mode */
+                        <>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">{emp.name || 'Unknown'}</p>
+                              <p className="text-xs text-blue-600 font-medium">{emp.role || 'No role'}</p>
+                              {emp.experience_years && <p className="text-xs text-gray-400">{emp.experience_years} years experience</p>}
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button onClick={() => setEditingEmp({ ...(emp as any), _id: emp.id })}
+                                className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Edit</button>
+                              <a href={emp.cv_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">
+                                View CV
+                              </a>
+                              <button onClick={() => { navigator.clipboard.writeText(emp.cv_url); }}
+                                className="text-xs text-gray-500 hover:text-green-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Copy Link</button>
+                              <button onClick={() => deleteEmployee(emp.id)}
+                                className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 border border-red-100">Remove</button>
+                            </div>
+                          </div>
+                          {emp.bio && <p className="text-xs text-gray-600 leading-relaxed">{emp.bio}</p>}
+                          {emp.skills?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {emp.skills.map((s: string, i: number) => (
+                                <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{s}</span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="pt-1 border-t border-gray-100">
+                            <p className="text-xs text-gray-400 break-all">
+                              <span className="font-medium text-gray-500">CV link: </span>{emp.cv_url}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {employees.length === 0 && !cvUploading && (
+              <p className="text-xs text-gray-400 text-center py-4">No employee CVs added yet. Upload a PDF above to get started.</p>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

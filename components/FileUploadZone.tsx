@@ -25,7 +25,7 @@ export function FileUploadZone({ file, accept, acceptLabel, onFile, onError }: P
       onClick={() => inputRef.current?.click()}
       onDragOver={e => e.preventDefault()}
       onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handle(f); }}
-      className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition mb-4"
+      className="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition mb-4"
     >
       <input ref={inputRef} type="file" accept={accept} className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handle(f); e.target.value = ''; }} />

@@ -62,11 +62,11 @@ function RegisterForm() {
   if (step === 'payment') return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <Link href="/"><Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain mx-auto" /></Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-4">Choose your plan</h1>
-        </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="text-center mb-2">
+            <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
+            <h1 className="text-lg font-bold text-gray-900 mt-3">Choose your plan</h1>
+          </div>
           {reason === 'subscription' && <div className="px-3 py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-sm">You need an active subscription to access the platform.</div>}
           {error && <div className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
@@ -83,7 +83,6 @@ function RegisterForm() {
             className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
             {loading ? 'Redirecting...' : `Pay with Pesapal`}
           </button>
-
         </div>
       </div>
     </div>
@@ -92,12 +91,12 @@ function RegisterForm() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <Link href="/"><Image src="/logo.png" alt="PryroTender" width={130} height={40} className="object-contain mx-auto" /></Link>
-          <h1 className="text-xl font-bold text-gray-900 mt-4">Create your account</h1>
-          <p className="text-sm text-gray-500 mt-1">Start finding and winning tenders today</p>
-        </div>
         <form onSubmit={handleRegister} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="text-center mb-2">
+            <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
+            <h1 className="text-lg font-bold text-gray-900 mt-3">Create your account</h1>
+            <p className="text-xs text-gray-500 mt-0.5">Start finding and winning tenders today</p>
+          </div>
           {error && <div className="px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Company Name</label>

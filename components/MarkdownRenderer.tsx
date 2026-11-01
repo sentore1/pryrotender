@@ -6,10 +6,17 @@ export function MarkdownRenderer({ content }: { content: string }) {
   let i = 0, k = 0;
 
   const renderInline = (text: string) => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((p, j) =>
-      p.startsWith('**') && p.endsWith('**') ? <strong key={j}>{p.slice(2, -2)}</strong> : <span key={j}>{p}</span>
-    );
+    // Split on bold markers and [FILL IN: ...] placeholders
+    const parts = text.split(/(\*\*[^*]+\*\*|\[FILL IN:[^\]]+\])/g);
+    return parts.map((p, j) => {
+      if (p.startsWith('**') && p.endsWith('**')) return <strong key={j}>{p.slice(2, -2)}</strong>;
+      if (p.startsWith('[FILL IN:')) return (
+        <mark key={j} className="bg-yellow-100 text-yellow-800 rounded px-1 py-0.5 font-medium not-italic border border-yellow-300 text-xs">
+          {p}
+        </mark>
+      );
+      return <span key={j}>{p}</span>;
+    });
   };
 
   while (i < lines.length) {
@@ -26,7 +33,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
         <div key={k++} className="overflow-x-auto my-3">
           <table className="w-full text-xs border-collapse">
             <thead><tr>{headers.map((h, j) => <th key={j} className="bg-gray-100 text-gray-800 px-3 py-2 text-left font-semibold border border-gray-200">{h}</th>)}</tr></thead>
-            <tbody>{rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => <td key={ci} className="px-3 py-1.5 border border-gray-200 text-gray-700">{cell}</td>)}</tr>)}</tbody>
+            <tbody>{rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => <td key={ci} className="px-3 py-1.5 border border-gray-200 text-gray-700">{renderInline(cell)}</td>)}</tr>)}</tbody>
           </table>
         </div>
       );

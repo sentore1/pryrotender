@@ -5,6 +5,17 @@ const BASE = process.env.PESAPAL_ENV === 'live'
   ? 'https://pay.pesapal.com/v3'
   : 'https://cybqa.pesapal.com/pesapalv3';
 
+/** Safely add months without day-overflow (e.g. Jan 31 + 1 month → Feb 28, not Mar 3) */
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  const targetMonth = d.getMonth() + months;
+  d.setMonth(targetMonth);
+  if (d.getMonth() !== ((targetMonth % 12) + 12) % 12) {
+    d.setDate(0);
+  }
+  return d;
+}
+
 async function getToken() {
   const res = await fetch(`${BASE}/api/Auth/RequestToken`, {
     method: 'POST',
@@ -34,8 +45,7 @@ export async function GET(req: NextRequest) {
     const db = supabaseAdmin();
 
     if (status.payment_status_description === 'COMPLETED') {
-      const periodEnd = new Date();
-      periodEnd.setMonth(periodEnd.getMonth() + (plan === 'annual' ? 12 : 1));
+      const periodEnd = addMonths(new Date(), plan === 'annual' ? 12 : 1);
 
       await db.from('subscriptions').update({
         status: 'paid', pesapal_tracking_id: trackingId,

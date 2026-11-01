@@ -1,37 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { generateProposal } from '@/lib/groq';
+
+// Helper: build a per-request Supabase client that forwards the user's auth token
+function supabaseWithToken(token: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+}
+
+// Extract the bearer token from either the Authorization header or Supabase cookie variants
+function extractToken(request: NextRequest): string | null {
+  // 1. Standard Authorization header (most reliable)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+
+  // 2. Supabase v2 cookie: sb-<project>-auth-token or sb-access-token
+  const allCookies = request.cookies.getAll();
+  for (const cookie of allCookies) {
+    if (cookie.name === 'sb-access-token' || cookie.name.endsWith('-auth-token')) {
+      try {
+        // v2 stores JSON: { access_token, refresh_token, ... }
+        const parsed = JSON.parse(decodeURIComponent(cookie.value));
+        if (parsed?.access_token) return parsed.access_token;
+      } catch {
+        // plain token string (v1 style)
+        if (cookie.value && cookie.value.length > 20) return cookie.value;
+      }
+    }
+  }
+
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get('sb-access-token')?.value;
-    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const token = extractToken(request);
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const client = supabaseWithToken(token);
+    const { data: { user }, error: authError } = await client.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { analysis, tenderName } = await request.json();
-    if (!analysis) return NextResponse.json({ success: false, error: 'Missing analysis' }, { status: 400 });
+    if (!analysis) {
+      return NextResponse.json({ success: false, error: 'Missing analysis' }, { status: 400 });
+    }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await client
       .from('profiles')
       .select('company_name,company_address,company_phone,company_email,company_website,company_ref_prefix,company_bio,required_documents,former_clients,logo_url,signature_url')
       .eq('id', user.id)
       .single();
 
-    const { data: notif } = await supabase
+    const { data: notif } = await client
       .from('notification_preferences')
       .select('categories')
       .eq('user_id', user.id)
       .single();
 
+    const refNumber = profile?.company_ref_prefix
+      ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+      : undefined;
+
     const companyInfo = {
       name: profile?.company_name,
       address: profile?.company_address,
       phone: profile?.company_phone,
+      email: profile?.company_email,
       website: profile?.company_website,
-      refNumber: profile?.company_ref_prefix
-        ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
-        : undefined,
+      refNumber,
       bio: profile?.company_bio,
       requiredDocuments: profile?.required_documents,
       formerClients: profile?.former_clients,
@@ -44,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     const proposalContent = await generateProposal(tenderDetails, requirements, companyInfo);
 
-    const { data: saved, error: saveErr } = await supabase
+    const { data: saved, error: saveErr } = await client
       .from('proposals')
       .insert({
         user_id: user.id,
@@ -70,9 +114,7 @@ export async function POST(request: NextRequest) {
         companyPhone: profile?.company_phone,
         companyEmail: profile?.company_email,
         companyWebsite: profile?.company_website,
-        refNumber: profile?.company_ref_prefix
-          ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
-          : undefined,
+        refNumber,
       },
     });
   } catch (error) {

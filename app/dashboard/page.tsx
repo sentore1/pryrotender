@@ -273,17 +273,16 @@ function DashboardContent() {
   const generateProposal = async (tender: Tender) => {
     setSelectedTender(tender); setGenerating(true); setProposal(''); setError('');
     try {
+      const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
       const res = await fetch('/api/generate-proposal', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenderDetails: tender.title + '\n\n' + tender.description, requirements: tender.requirements, companyInfo: profile ? { name: profile.company_name, address: profile.company_address, phone: profile.company_phone, email: profile.company_email, website: profile.company_website, refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined, bio: profile.company_bio, requiredDocuments: profile.required_documents, formerClients: profile.former_clients } : undefined }),
+        method: 'POST', headers,
+        body: JSON.stringify({ tenderDetails: tender.title + '\n\n' + tender.description, requirements: tender.requirements, tenderName: tender.title, companyInfo: profile ? { name: profile.company_name, address: profile.company_address, phone: profile.company_phone, email: profile.company_email, website: profile.company_website, refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined, bio: profile.company_bio, requiredDocuments: profile.required_documents, formerClients: profile.former_clients } : undefined }),
       });
       const data = await res.json();
       if (data.success) {
         setProposal(data.proposal);
-        await fetch('/api/proposals', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenderName: tender.title, content: data.proposal }),
-        });
       } else setError(data.error || 'Failed.');
     } catch { setError('Error.'); } finally { setGenerating(false); }
   };
@@ -304,17 +303,16 @@ function DashboardContent() {
     if (!customText.trim()) return;
     setCustomGenerating(true); setCustomProposal(''); setError('');
     try {
+      const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
       const res = await fetch('/api/generate-proposal', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenderDetails: customText, requirements: customText }),
+        method: 'POST', headers,
+        body: JSON.stringify({ tenderDetails: customText, requirements: customText, tenderName: 'Custom Proposal' }),
       });
       const data = await res.json();
       if (data.success) {
         setCustomProposal(data.proposal);
-        await fetch('/api/proposals', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenderName: 'Custom Proposal', content: data.proposal }),
-        });
       } else setError(data.error || 'Failed.');
     } catch { setError('Error generating proposal.'); } finally { setCustomGenerating(false); }
   };

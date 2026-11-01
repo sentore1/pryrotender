@@ -1,12 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { generateProposal } from '@/lib/groq';
-import { supabase } from '@/lib/supabase';
-import { cookies } from 'next/headers';
+
+function supabaseWithToken(token: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+}
+
+function extractToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+
+  const allCookies = request.cookies.getAll();
+  for (const cookie of allCookies) {
+    if (cookie.name === 'sb-access-token' || cookie.name.endsWith('-auth-token')) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(cookie.value));
+        if (parsed?.access_token) return parsed.access_token;
+      } catch {
+        if (cookie.value && cookie.value.length > 20) return cookie.value;
+      }
+    }
+  }
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tenderDetails, requirements, companyInfo } = body;
+    const { tenderDetails, requirements, companyInfo, tenderName } = body;
 
     if (!tenderDetails || !requirements) {
       return NextResponse.json(
@@ -15,22 +40,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use companyInfo from request body directly (passed from dashboard)
+    // Try to get authenticated user — optional, used to enrich profile + save
+    const token = extractToken(request);
+    let userId: string | null = null;
     let enrichedCompanyInfo = companyInfo || {};
-    if (!companyInfo) {
+
+    if (token) {
       try {
-        const token = request.cookies.get('sb-access-token')?.value;
-        if (token) {
-          const { data: { user } } = await supabase.auth.getUser(token);
-          if (user) {
-            const { data: profile } = await supabase.from('profiles').select('company_name,company_address,company_phone,company_website,company_ref_prefix,company_bio,required_documents,former_clients').eq('id', user.id).single();
+        const client = supabaseWithToken(token);
+        const { data: { user } } = await client.auth.getUser();
+        if (user) {
+          userId = user.id;
+
+          // If no companyInfo passed, pull from profile
+          if (!companyInfo) {
+            const { data: profile } = await client
+              .from('profiles')
+              .select('company_name,company_address,company_phone,company_email,company_website,company_ref_prefix,company_bio,required_documents,former_clients')
+              .eq('id', user.id)
+              .single();
+
             if (profile) {
               enrichedCompanyInfo = {
                 name: profile.company_name,
                 address: profile.company_address,
                 phone: profile.company_phone,
+                email: profile.company_email,
                 website: profile.company_website,
-                refNumber: profile.company_ref_prefix ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-001` : undefined,
+                refNumber: profile.company_ref_prefix
+                  ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+                  : undefined,
                 bio: profile.company_bio,
                 requiredDocuments: profile.required_documents,
                 formerClients: profile.former_clients,
@@ -38,10 +77,26 @@ export async function POST(request: NextRequest) {
             }
           }
         }
-      } catch { /* continue without profile enrichment */ }
+      } catch { /* continue without auth enrichment */ }
     }
 
     const proposal = await generateProposal(tenderDetails, requirements, enrichedCompanyInfo);
+
+    // Save to proposals table if we have a user
+    if (userId && token) {
+      try {
+        const client = supabaseWithToken(token);
+        const name = tenderName || tenderDetails.split('\n')[0].slice(0, 120) || 'Untitled Tender';
+        await client.from('proposals').insert({
+          user_id: userId,
+          tender_name: name,
+          content: proposal,
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Failed to save proposal:', e);
+      }
+    }
 
     return NextResponse.json({ success: true, proposal });
   } catch (error) {

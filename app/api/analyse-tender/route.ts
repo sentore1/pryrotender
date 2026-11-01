@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { timingSafeEqual } from 'crypto';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent';
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
 
@@ -13,93 +14,72 @@ function isValidKey(key: string) {
   try { return !timingSafeEqual(Buffer.from(key), Buffer.from(placeholder)); } catch { return true; }
 }
 
-async function extractTextFromScannedPDF(buffer: Buffer, apiKey: string): Promise<string> {
+async function extractTextFromScannedPDF(buffer: Buffer): Promise<string> {
   const errors: string[] = [];
+
+  // Render PDF pages to base64 JPEGs via a standalone child process.
+  // Running outside the Next.js bundle means pdfjs instanceof checks work correctly
+  // against the real canvas module, not a bundled copy.
+  let pageImages: string[] = [];
   try {
-    // Use dynamic import() — pdfjs-dist v6 is pure ESM, require() does not work.
-    // The worker is bundled into the main file in v6, do NOT import it separately.
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createCanvas, Image } = require('canvas');
-
-    // Patch global Image so pdfjs inline image rendering works in Node
-    (global as any).Image = Image;
-
-    const NodeCanvasFactory = {
-      create(width: number, height: number) {
-        const canvas = createCanvas(width, height);
-        return { canvas, context: canvas.getContext('2d') };
-      },
-      reset(canvasAndCtx: { canvas: any; context: any }, width: number, height: number) {
-        canvasAndCtx.canvas.width = width;
-        canvasAndCtx.canvas.height = height;
-      },
-      destroy(canvasAndCtx: { canvas: any; context: any }) {
-        canvasAndCtx.canvas.width = 0;
-        canvasAndCtx.canvas.height = 0;
-      },
-    };
-
-    const getDocument = pdfjsLib.getDocument ?? pdfjsLib.default?.getDocument;
-    if (typeof getDocument !== 'function') {
-      throw new Error('pdfjs-dist: getDocument not found on module exports');
-    }
-
-    const loadingTask = getDocument({ data: new Uint8Array(buffer), canvasFactory: NodeCanvasFactory });
-    const pdf = await loadingTask.promise;
-    const numPages = Math.min(pdf.numPages, 10);
-    const pageTexts: string[] = [];
-
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      try {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.0 }); // higher scale = better OCR quality
-        const canvasAndCtx = NodeCanvasFactory.create(viewport.width, viewport.height);
-        await page.render({
-          canvasContext: canvasAndCtx.context,
-          viewport,
-          canvasFactory: NodeCanvasFactory,
-        }).promise;
-        const base64 = canvasAndCtx.canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-        NodeCanvasFactory.destroy(canvasAndCtx);
-
-        const res = await axios.post(
-          GROQ_API_URL,
-          {
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            messages: [{
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `Extract ALL text from page ${pageNum} of this document exactly as it appears. Include all headings, bullet points, tables, and body text. Return only the raw extracted text, no commentary.`,
-                },
-                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-              ],
-            }],
-            temperature: 0.1,
-            max_tokens: 4000,
-          },
-          { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
-        );
-        pageTexts.push(`--- Page ${pageNum} ---\n${res.data.choices[0].message.content}`);
-      } catch (pageErr: any) {
-        const msg = pageErr?.message || String(pageErr);
-        console.error(`Vision OCR page ${pageNum} error:`, msg);
-        errors.push(`Page ${pageNum}: ${msg}`);
-      }
-    }
-
-    if (pageTexts.length === 0 && errors.length > 0) {
-      throw new Error(`All pages failed OCR: ${errors.join('; ')}`);
-    }
-    return pageTexts.join('\n\n');
+    const { execFileSync } = require('child_process');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { resolve } = require('path');
+    // Build the path at runtime via eval so Turbopack can't statically resolve
+    // the string literal as a module import (which causes a build warning/error).
+    // The script runs as a child process — it's not bundled, only resolved at runtime.
+    const scriptPath = eval('resolve(process.cwd(), "scripts", "pdf-render.mjs")');
+    const input = JSON.stringify({ pdfBase64: buffer.toString('base64'), maxPages: 10 });
+    const output = execFileSync('node', [scriptPath], {
+      input,
+      encoding: 'utf8',
+      timeout: 60000,
+      maxBuffer: 100 * 1024 * 1024, // 100 MB — large PDFs produce large base64
+    });
+    pageImages = JSON.parse(output);
   } catch (err: any) {
-    const msg = err?.message || String(err);
-    console.error('Vision OCR fatal error:', msg);
-    // Re-throw so the caller can surface the real error to the user
-    throw new Error(`Scanned PDF OCR failed: ${msg}`);
+    const msg = err?.stderr || err?.message || String(err);
+    throw new Error(`PDF rendering failed: ${msg}`);
   }
+
+  if (pageImages.length === 0) throw new Error('PDF rendering produced no pages');
+
+  // OCR each page via Gemini Vision (free tier, excellent document OCR)
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) throw new Error('GEMINI_API_KEY not configured');
+
+  for (let i = 0; i < pageImages.length; i++) {
+    const pageNum = i + 1;
+    try {
+      const res = await axios.post(
+        `${GEMINI_API_URL}?key=${geminiKey}`,
+        {
+          contents: [{
+            parts: [
+              { text: `Extract ALL text from page ${pageNum} of this document exactly as it appears. Include all headings, bullet points, tables, and body text. Return only the raw extracted text, no commentary.` },
+              { inlineData: { mimeType: 'image/jpeg', data: pageImages[i] } },
+            ],
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      const text = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      pageImages[i] = `--- Page ${pageNum} ---\n${text}`;
+    } catch (pageErr: any) {
+      const msg = pageErr?.response?.data?.error?.message || pageErr?.message || String(pageErr);
+      console.error(`Gemini OCR page ${pageNum} error:`, msg);
+      errors.push(`Page ${pageNum}: ${msg}`);
+      pageImages[i] = '';
+    }
+  }
+
+  const pageTexts = pageImages.filter(Boolean);
+  if (pageTexts.length === 0) {
+    throw new Error(`All pages failed OCR: ${errors.filter(Boolean).join('; ')}`);
+  }
+  return pageTexts.join('\n\n');
 }
 
 export async function POST(request: NextRequest) {
@@ -139,7 +119,7 @@ export async function POST(request: NextRequest) {
         const apiKey = process.env.GROQ_API_KEY;
         if (!apiKey || !isValidKey(apiKey)) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 });
         try {
-          tenderText = await extractTextFromScannedPDF(buffer, apiKey);
+          tenderText = await extractTextFromScannedPDF(buffer);
         } catch (ocrErr: any) {
           extractionError = ocrErr?.message || String(ocrErr);
           console.error('OCR fallback failed:', extractionError);
