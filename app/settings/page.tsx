@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'company' | 'notifications' | 'sidebar' | 'proposal' | 'subscription' | 'employees'>('company');
+  const [tab, setTab] = useState<'company' | 'proposal' | 'notifications' | 'email' | 'sidebar' | 'subscription' | 'employees'>('company');
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -49,6 +49,12 @@ export default function SettingsPage() {
   const [extraEmailInput, setExtraEmailInput] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState('');
+
+  // Email / sender settings (per-user SMTP or Gmail)
+  const [emailSettings, setEmailSettings] = useState({ provider: 'gmail' as 'gmail' | 'smtp', smtp_host: '', smtp_port: 465, smtp_user: '', smtp_password: '', smtp_secure: true, sender_name: '' });
+  const [emailTesting, setEmailTesting] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState('');
+
   const [profile, setProfile] = useState<any>(null);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>(ALL_NAV_CATS.slice(0, 5));
   const [sidebarSearch, setSidebarSearch] = useState('');
@@ -89,6 +95,18 @@ export default function SettingsPage() {
       }
       const { data: n } = await supabase.from('notification_preferences').select('*').eq('user_id', uid).single();
       if (n) setNotif({ enabled: n.enabled, frequency: n.frequency, keywords: n.keywords || [], categories: n.categories || [], notification_email: n.notification_email || '', extra_emails: n.extra_emails || [] });
+
+      // Email / sender settings
+      const { data: es } = await supabase.from('email_settings').select('*').eq('user_id', uid).maybeSingle();
+      if (es) setEmailSettings({
+        provider: es.provider === 'smtp' ? 'smtp' : 'gmail',
+        smtp_host: es.smtp_host || '',
+        smtp_port: es.smtp_port ?? 465,
+        smtp_user: es.smtp_user || '',
+        smtp_password: es.smtp_password || '',
+        smtp_secure: es.smtp_secure ?? true,
+        sender_name: es.sender_name || '',
+      });
 
       // Load employees
       const { data: emps } = await supabase.from('employees').select('*').eq('user_id', uid).order('created_at', { ascending: false });
@@ -168,6 +186,62 @@ export default function SettingsPage() {
     } catch { setTestResult('Failed to send test.'); }
     setTesting(false);
     setTimeout(() => setTestResult(''), 4000);
+  };
+
+  // ── Email / sender settings ──────────────────────────────────────────────
+  const persistEmail = async () => {
+    // Gmail uses a fixed transport; normalise so the API can rely on it.
+    const provider = emailSettings.provider;
+    const isGmail = provider === 'gmail';
+    return supabase.from('email_settings').upsert({
+      user_id: userId,
+      provider,
+      smtp_host: isGmail ? 'smtp.gmail.com' : emailSettings.smtp_host.trim(),
+      smtp_port: Number(emailSettings.smtp_port) || (isGmail ? 465 : 587),
+      smtp_user: emailSettings.smtp_user.trim(),
+      smtp_password: emailSettings.smtp_password,
+      smtp_secure: isGmail ? true : !!emailSettings.smtp_secure,
+      sender_name: emailSettings.sender_name.trim(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+  };
+
+  const saveEmailSettings = async () => {
+    setSaving(true);
+    const { error } = await persistEmail();
+    if (error) {
+      alert(/relation .* does not exist|schema/i.test(error.message)
+        ? 'The email_settings table is not set up yet. Run the latest SQL in supabase-schema.sql.'
+        : error.message);
+    } else {
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    }
+    setSaving(false);
+  };
+
+  const sendTestEmail = async () => {
+    setEmailTesting(true); setEmailTestResult('');
+    // Save first so the test uses the on-screen config.
+    const { error: saveErr } = await persistEmail();
+    if (saveErr) {
+      setEmailTestResult(/relation .* does not exist|schema/i.test(saveErr.message)
+        ? 'Email settings table not set up on the server.'
+        : 'Could not save settings: ' + saveErr.message);
+      setEmailTesting(false);
+      return;
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({ test: true }),
+      });
+      const data = await res.json();
+      setEmailTestResult(data.success ? '✓ Test email sent! Check your inbox.' : (data.error || 'Failed to send.'));
+    } catch { setEmailTestResult('Network error.'); }
+    setEmailTesting(false);
+    setTimeout(() => setEmailTestResult(''), 6000);
   };
 
   const saveProposal = async () => {
@@ -261,7 +335,7 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="flex gap-2 mb-6">
-          {(['company', 'proposal', 'notifications', 'sidebar', 'subscription', 'employees'] as const).map(t => (
+          {(['company', 'proposal', 'notifications', 'email', 'sidebar', 'subscription', 'employees'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
               {t}
@@ -432,6 +506,102 @@ export default function SettingsPage() {
               </button>
             </div>
             {testResult && <p className={`text-xs text-center font-medium ${testResult.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{testResult}</p>}
+          </div>
+        )}
+
+        {tab === 'email' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
+            <div>
+              <h2 className="font-semibold text-gray-800">Email / Sender Account</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Configure the account PryroTender uses to send emails on your behalf (e.g. to a tender&apos;s contact). Saved with your account.</p>
+            </div>
+
+            {/* Provider selector */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-2">Provider</label>
+              <div className="flex gap-2">
+                <button onClick={() => setEmailSettings(s => ({ ...s, provider: 'gmail', smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true }))}
+                  className={`flex-1 px-4 py-2 text-sm rounded-lg font-medium transition ${emailSettings.provider === 'gmail' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  Gmail
+                </button>
+                <button onClick={() => setEmailSettings(s => ({ ...s, provider: 'smtp' }))}
+                  className={`flex-1 px-4 py-2 text-sm rounded-lg font-medium transition ${emailSettings.provider === 'smtp' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  Custom SMTP
+                </button>
+              </div>
+            </div>
+
+            {/* Sender name (both) */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Sender Name (optional)</label>
+              <input type="text" value={emailSettings.sender_name} onChange={e => setEmailSettings(s => ({ ...s, sender_name: e.target.value }))}
+                placeholder="e.g. Your Company Ltd"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-xs text-gray-400 mt-1">Shown as the &quot;From&quot; name. Defaults to your email address.</p>
+            </div>
+
+            {/* Email + password (both) */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">{emailSettings.provider === 'gmail' ? 'Gmail Address' : 'SMTP Username / Email'}</label>
+              <input type="email" value={emailSettings.smtp_user} onChange={e => setEmailSettings(s => ({ ...s, smtp_user: e.target.value }))}
+                placeholder={emailSettings.provider === 'gmail' ? 'you@gmail.com' : 'you@yourcompany.com'}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">{emailSettings.provider === 'gmail' ? 'Gmail App Password' : 'SMTP Password'}</label>
+              <input type="password" value={emailSettings.smtp_password} onChange={e => setEmailSettings(s => ({ ...s, smtp_password: e.target.value }))}
+                placeholder={emailSettings.provider === 'gmail' ? '16-character app password' : 'Your SMTP password'}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {emailSettings.provider === 'gmail' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Use a <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Google App Password</a>, not your normal Gmail password.
+                </p>
+              )}
+            </div>
+
+            {/* Custom SMTP only */}
+            {emailSettings.provider === 'smtp' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">SMTP Host</label>
+                    <input type="text" value={emailSettings.smtp_host} onChange={e => setEmailSettings(s => ({ ...s, smtp_host: e.target.value }))}
+                      placeholder="smtp.yourcompany.com"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Port</label>
+                    <input type="number" value={emailSettings.smtp_port} onChange={e => setEmailSettings(s => ({ ...s, smtp_port: Number(e.target.value) }))}
+                      placeholder="587"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Use SSL/TLS (secure)</p>
+                    <p className="text-xs text-gray-400">Enable for port 465. Disable for 587 (STARTTLS).</p>
+                  </div>
+                  <button onClick={() => setEmailSettings(s => ({ ...s, smtp_secure: !s.smtp_secure }))}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${emailSettings.smtp_secure ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${emailSettings.smtp_secure ? 'translate-x-5' : ''}`} />
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={saveEmailSettings} disabled={saving}
+                className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
+                {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save'}
+              </button>
+              <button onClick={sendTestEmail} disabled={emailTesting || !emailSettings.smtp_user || !emailSettings.smtp_password}
+                title={!emailSettings.smtp_user || !emailSettings.smtp_password ? 'Enter email and password first' : ''}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition text-sm">
+                {emailTesting ? 'Sending...' : 'Send Test Email'}
+              </button>
+            </div>
+            {emailTestResult && <p className={`text-xs text-center font-medium ${emailTestResult.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{emailTestResult}</p>}
           </div>
         )}
 

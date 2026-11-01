@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { FileUploadZone } from '@/components/FileUploadZone';
@@ -351,9 +351,28 @@ export default function AnalyseTenderPage() {
   const [proposal, setProposal] = useState<ProposalData | null>(null);
   const [view, setView] = useState<'analysis' | 'proposal'>('analysis');
 
+  // Email composer
+  const [contactEmails, setContactEmails] = useState<string[]>([]);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailForm, setEmailForm] = useState({ to: '', subject: '', body: '' });
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState('');
+  const [companyName, setCompanyName] = useState('');
+
+  // Load the subscriber's company name once, so we can sign composed emails.
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user?.id) {
+        const { data: p } = await supabase.from('profiles').select('company_name').eq('id', user.id).maybeSingle();
+        if (p?.company_name) setCompanyName(p.company_name);
+      }
+    });
+  }, []);
+
   const reset = () => {
     setFile(null); setPastedText(''); setAnalysis(''); setError('');
     setChatInput(''); setProposal(null); setView('analysis');
+    setContactEmails([]); setShowEmailModal(false);
   };
 
   const canAnalyse = inputTab === 'upload' ? !!file : pastedText.trim().length > 20;
@@ -376,8 +395,10 @@ export default function AnalyseTenderPage() {
 
       const res = await fetch('/api/analyse-tender', { method: 'POST', body: fd });
       const data = await res.json();
-      if (data.success) setAnalysis(data.analysis);
-      else setError(data.error || 'Analysis failed.');
+      if (data.success) {
+        setAnalysis(data.analysis);
+        setContactEmails(data.contactEmails || []);
+      } else setError(data.error || 'Analysis failed.');
     } catch { setError('Network error.'); }
     finally { setLoading(false); }
   };
@@ -457,6 +478,43 @@ export default function AnalyseTenderPage() {
   };
 
   const tenderFilename = file?.name?.replace(/\.[^.]+$/, '') || 'proposal';
+
+  const openEmailModal = (email?: string) => {
+    const to = email || contactEmails[0] || '';
+    const tenderName = file?.name?.replace(/\.[^.]+$/, '') || 'Tender';
+    const signature = companyName ? `\n\nBest regards,\n${companyName}` : '\n\nBest regards,';
+    setEmailForm({
+      to,
+      subject: `Inquiry regarding: ${tenderName}`,
+      body: `Dear Sir/Madam,\n\nI am writing in reference to the above tender and would like to express our interest and request further information.${signature}`,
+    });
+    setEmailStatus('');
+    setShowEmailModal(true);
+  };
+
+  const sendEmail = async () => {
+    if (!emailForm.to.trim() || !emailForm.subject.trim() || !emailForm.body.trim()) {
+      setEmailStatus('Please fill in the recipient, subject, and body.');
+      return;
+    }
+    setSendingEmail(true); setEmailStatus('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({ to: emailForm.to, subject: emailForm.subject, body: emailForm.body }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEmailStatus('✓ Email sent successfully!');
+        setTimeout(() => { setShowEmailModal(false); setEmailStatus(''); }, 1500);
+      } else {
+        setEmailStatus(data.error || 'Failed to send email.');
+      }
+    } catch { setEmailStatus('Network error.'); }
+    setSendingEmail(false);
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -545,10 +603,26 @@ export default function AnalyseTenderPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Analysis Result</span>
                   <div className="flex gap-2">
+                    <button onClick={() => openEmailModal()} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      Send Email
+                    </button>
                     <button onClick={() => navigator.clipboard.writeText(analysis)} className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50">Copy</button>
                     <button onClick={reset} className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded hover:bg-gray-50">Reset</button>
                   </div>
                 </div>
+
+                {contactEmails.length > 0 && (
+                  <div className="flex items-start gap-2 flex-wrap text-xs bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    <span className="text-blue-600 font-medium shrink-0 mt-0.5">Detected contact emails:</span>
+                    {contactEmails.map(em => (
+                      <button key={em} onClick={() => openEmailModal(em)}
+                        className="px-2 py-0.5 bg-white text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 transition font-medium">
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <MarkdownRenderer content={analysis} />
 
@@ -620,6 +694,66 @@ export default function AnalyseTenderPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Email composer modal ── */}
+        {showEmailModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-800">Send Email</h3>
+                <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">To</label>
+                  <input type="email" value={emailForm.to} onChange={e => setEmailForm(f => ({ ...f, to: e.target.value }))}
+                    placeholder="recipient@example.com"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  {contactEmails.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {contactEmails.map(em => (
+                        <button key={em} type="button" onClick={() => setEmailForm(f => ({ ...f, to: em }))}
+                          className={`px-2 py-0.5 text-xs rounded-full border transition ${emailForm.to === em ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}`}>
+                          {em}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Subject</label>
+                  <input type="text" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))}
+                    placeholder="Subject"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Body</label>
+                  <textarea value={emailForm.body} onChange={e => setEmailForm(f => ({ ...f, body: e.target.value }))}
+                    rows={8}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                </div>
+                {emailStatus && (
+                  <p className={`text-xs font-medium ${emailStatus.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{emailStatus}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setShowEmailModal(false)} disabled={sendingEmail}
+                    className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm">
+                    Cancel
+                  </button>
+                  <button onClick={sendEmail} disabled={sendingEmail}
+                    className="flex-1 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm flex items-center justify-center gap-2">
+                    {sendingEmail ? <><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />Sending...</> : 'Send Email'}
+                  </button>
+                </div>
+                {emailStatus && !emailStatus.startsWith('✓') && /settings|smtp|gmail|not configured|login failed|connect/i.test(emailStatus) && (
+                  <p className="text-xs text-center text-gray-500">
+                    Set up your sender account in <a href="/settings" className="text-blue-600 underline">Settings → Email</a>.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

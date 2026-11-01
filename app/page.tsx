@@ -2,8 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { TendersGrid, TendersSkeleton } from './TendersGrid';
-import PricingSection from './PricingSection';
+import { TendersBrowser, TendersBrowserSkeleton } from '@/components/TendersBrowser';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tender.pryro.com';
 
@@ -31,7 +30,6 @@ export default async function LandingPage() {
         <div className="flex items-center gap-5">
           <div className="hidden md:flex items-center gap-5 text-sm font-medium text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition">Features</a>
-            <a href="#pricing" className="hover:text-gray-900 transition">Pricing</a>
             <Link href="/tenders" className="hover:text-gray-900 transition">Tenders</Link>
             <a href="mailto:hello@pryro.com" className="hover:text-gray-900 transition">Contact</a>
           </div>
@@ -56,7 +54,7 @@ export default async function LandingPage() {
         <div className="flex items-center justify-center gap-1 mb-10 md:mb-16">
           <div className="flex bg-gray-100 p-1 gap-1" style={{borderRadius:'4px'}}>
             <Link href="/register" className="px-3 py-1.5 bg-white text-gray-900 font-semibold shadow text-xs" style={{borderRadius:'4px'}}>Start for Free</Link>
-            <Link href="#pricing" className="px-3 py-1.5 text-gray-500 font-semibold hover:text-gray-700 transition text-xs" style={{borderRadius:'4px'}}>View Pricing</Link>
+            <Link href="/tenders" className="px-3 py-1.5 text-gray-500 font-semibold hover:text-gray-700 transition text-xs" style={{borderRadius:'4px'}}>Browse Tenders</Link>
           </div>
         </div>
       </section>
@@ -192,58 +190,12 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Category quick-links — internal links for crawlers */}
-      <section id="features" className="bg-gray-50 border-y border-gray-100 py-6">
-        <div className="max-w-5xl mx-auto px-4 md:px-6">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide text-center mb-4">Browse by category</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {[
-              { href: '/tenders/category/ict-software',    label: 'ICT & Software' },
-              { href: '/tenders/category/construction',    label: 'Construction' },
-              { href: '/tenders/category/consultancy',     label: 'Consultancy' },
-              { href: '/tenders/category/goods-supply',    label: 'Goods & Supply' },
-              { href: '/tenders/category/medical-health',  label: 'Medical & Health' },
-              { href: '/tenders/category/ngo-development', label: 'NGO & Development' },
-              { href: '/tenders/category/government',      label: 'Government' },
-              { href: '/tenders/category/private-sector',  label: 'Private Sector' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 text-gray-600 rounded-full hover:border-blue-300 hover:text-blue-700 transition">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+      {/* Live Tenders — full browse UI (same as /tenders) */}
+      <section id="tenders" className="bg-white">
+        <Suspense fallback={<TendersBrowserSkeleton />}>
+          <TendersBrowser page={1} query="" category="" basePath="/tenders" />
+        </Suspense>
       </section>
-
-      {/* Live Tenders Preview */}
-      <section id="tenders" className="bg-white py-10 md:py-16">
-        <div className="max-w-5xl mx-auto px-4 md:px-6">
-          <div className="text-center mb-8 md:mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Live Tenders Preview</h2>
-            <p className="text-gray-500 text-sm">
-              A sample of tenders available right now.{' '}
-              <Link href="/tenders" className="text-blue-600 hover:underline">Browse all tenders →</Link>
-            </p>
-          </div>
-          <Suspense fallback={<TendersSkeleton />}>
-            <TendersGrid />
-          </Suspense>
-          <div className="text-center mt-8 flex items-center justify-center gap-3">
-            <Link href="/tenders"
-              className="inline-block px-6 py-3 border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition text-sm" style={{borderRadius:'4px'}}>
-              Browse All Tenders
-            </Link>
-            <Link href="/register"
-              className="inline-block px-6 py-3 text-white font-semibold hover:opacity-90 transition text-sm" style={{borderRadius:'4px', backgroundColor:'#3A86FF'}}>
-              Generate Proposal →
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <PricingSection />
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-8 text-center text-xs text-gray-400">

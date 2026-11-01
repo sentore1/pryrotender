@@ -127,3 +127,27 @@ create table if not exists proposals (
 
 alter table proposals enable row level security;
 create policy "Users can manage own proposals" on proposals for all using (auth.uid() = user_id);
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- Email / Sender settings (per-user SMTP or Gmail config for sending tender emails)
+-- Run this block in your Supabase SQL editor.
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists email_settings (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade unique,
+  provider text default 'gmail',          -- 'gmail' | 'smtp'
+  smtp_host text,                          -- e.g. smtp.gmail.com (ignored when provider = 'gmail')
+  smtp_port int default 465,
+  smtp_user text,                          -- sender / login email
+  smtp_password text,                     -- app password or SMTP password (stored as-is)
+  smtp_secure boolean default true,        -- true = implicit TLS (port 465), false = STARTTLS (587)
+  sender_name text,                         -- friendly From display name
+  updated_at timestamptz default now()
+);
+
+alter table email_settings enable row level security;
+
+-- Owner-only access: a user can read, insert, update, and delete only their own row.
+create policy "Users can manage own email settings" on email_settings for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

@@ -233,7 +233,7 @@ export default async function CategoryPage({
                 </Link>
                 <Link
                   href={`/tenders/category/${cat}`}
-                  className="block text-sm px-2 py-1.5 rounded bg-blue-50 text-blue-700 font-semibold"
+                  className="block text-sm px-2 py-1.5 rounded bg-blue-600 text-white font-semibold"
                 >
                   {label}
                 </Link>
@@ -293,12 +293,12 @@ export default async function CategoryPage({
                             <span className="font-medium text-gray-600">{row.organization}</span>
                           )}
                         </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-gray-100 mt-auto">
+                        <div className="flex flex-col gap-0.5 pt-1 border-t border-gray-100 mt-auto">
                           <span className={`text-xs ${isExpired ? 'text-red-500' : isClosingSoon ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
                             {isExpired ? 'Closed: ' : 'Deadline: '}{formatDeadline(row.deadline ?? 'Not specified')}
                           </span>
                           <span className="text-xs font-semibold text-blue-600">
-                            {row.slug ? 'View →' : 'Propose →'}
+                            {row.slug ? 'View details' : 'Generate proposal'}
                           </span>
                         </div>
                       </div>

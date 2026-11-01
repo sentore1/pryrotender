@@ -126,6 +126,18 @@ export async function POST(request: NextRequest) {
       error: `Could not extract text from this PDF. It may be a scanned document that could not be processed. Details: ${extractionError || 'unknown error'}`,
     }, { status: 400 });
 
+    // Extract any contact emails found in the tender document so the subscriber
+    // can email the procuring entity directly from the analysis view.
+    const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const contactEmails = Array.from(
+      new Set((tenderText.match(EMAIL_RE) || [])),
+    ).filter(
+      (e) =>
+        !/@(example|test|yourdomain|domain|sentry)\./i.test(e) &&
+        !/^(noreply|no-reply|donotreply|do-not-reply)@/i.test(e) &&
+        !/\.(png|jpe?g|gif|svg|webp|bmp|css|js)$/i.test(e),
+    ).slice(0, 8);
+
     // Load profile using verified user.id (not from request body)
     let companyContext = '';
     const { data: profile } = await supabase.from('profiles').select('company_name,company_address,company_phone,company_website').eq('id', user.id).single();
@@ -178,7 +190,7 @@ Rough budget range estimate if determinable.`;
       max_tokens: 4000,
     });
 
-    return NextResponse.json({ success: true, analysis });
+    return NextResponse.json({ success: true, analysis, contactEmails });
   } catch (error: any) {
     console.error('Tender analysis error:', error);
     return NextResponse.json({ success: false, error: 'Failed to analyse tender' }, { status: 500 });

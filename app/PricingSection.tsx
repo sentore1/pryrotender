@@ -28,7 +28,7 @@ export default function PricingSection() {
 
   return (
     <section id="pricing" className="bg-white py-10 md:py-16">
-      <div className="max-w-4xl mx-auto px-4 md:px-6">
+      <div className="w-full px-5 md:px-8 lg:px-12">
         <h2 className="text-2xl md:text-3xl font-bold text-center mb-2">Our Pricing</h2>
         <p className="text-center text-gray-500 text-sm mb-6">Cancel anytime. No hidden fees.</p>
         <div className="flex items-center justify-center mb-10">
