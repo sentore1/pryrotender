@@ -37,13 +37,13 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
     // Use allSettled so one failure doesn't kill the other
     const [jobInRwandaResult, umucyoResult] = await Promise.allSettled([
       axios.get(`${JOB_IN_RWANDA_URL}/jobs/tender`, { 
-        timeout: 15000,
+        timeout: 10000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       }),
       axios.get(`${UMUCYO_URL}/pt/pcm/moveMainPageDetail.do`, {
-        timeout: 15000,
+        timeout: 10000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }

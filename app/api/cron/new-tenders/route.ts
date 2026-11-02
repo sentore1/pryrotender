@@ -4,6 +4,9 @@ import { sendEmail } from '@/lib/mail';
 import { scrapeTenders, Tender } from '@/lib/scraper';
 import { generateTenderSlug, generateUniqueSlug, submitIndexNow } from '@/lib/seo';
 
+// Allow up to 60 seconds — scraping two external sites + sending emails needs time
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('x-cron-secret');
   if (auth !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
@@ -125,14 +128,23 @@ export async function POST(req: NextRequest) {
     // 6. Filter new tenders by each user's keywords / categories
     const matched = newTenders.filter(t => {
       const text = `${t.title} ${t.description} ${t.category}`.toLowerCase();
+
+      // Keyword match: any keyword appears in the tender text
       const kwMatch = pref.keywords?.length
         ? pref.keywords.some((kw: string) => text.includes(kw.toLowerCase()))
         : true;
+
+      // Category match: use OR logic always — user-defined category labels (e.g. "Consultancy",
+      // "Services") are broader intent signals, not exact field values from the scraper.
+      // If no categories set, treat as "match all".
       const catMatch = pref.categories?.length
         ? pref.categories.some((cat: string) => text.includes(cat.toLowerCase()))
         : true;
-      // Both keywords AND categories must match (if both are set)
-      if (pref.keywords?.length && pref.categories?.length) return kwMatch && catMatch;
+
+      // If only keywords are set → keyword match is sufficient.
+      // If only categories are set → category match is sufficient.
+      // If both are set → either matching is sufficient (OR), so users aren't silently excluded
+      // just because the scraped category field doesn't use their exact label wording.
       return kwMatch || catMatch;
     });
 
@@ -166,7 +178,7 @@ export async function POST(req: NextRequest) {
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
         <div style="background:#2563eb;padding:20px;border-radius:8px 8px 0 0">
-          <h2 style="color:white;margin:0">🔔 New Tenders Alert</h2>
+          <h2 style="color:white;margin:0"> New Tenders Alert</h2>
         </div>
         <div style="padding:20px;background:#f9fafb">
           <p>Hi ${profile.company_name || 'there'},</p>

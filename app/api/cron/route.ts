@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('x-cron-secret');
   if (auth !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
