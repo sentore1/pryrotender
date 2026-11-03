@@ -6,8 +6,14 @@ const BASE = process.env.PESAPAL_ENV === 'live'
   : 'https://cybqa.pesapal.com/pesapalv3';
 
 const PLANS = {
-  monthly: { amount: 10, currency: 'USD', description: 'PryroTender Monthly Subscription' },
-  annual: { amount: 99, currency: 'USD', description: 'PryroTender Annual Subscription' },
+  monthly: {
+    RWF:  { amount: 100,  currency: 'RWF',  description: 'PryroTender Monthly Subscription' },
+    USDT: { amount: 10,   currency: 'USD',  description: 'PryroTender Monthly Subscription' },
+  },
+  annual: {
+    RWF:  { amount: 100,  currency: 'RWF',  description: 'PryroTender Annual Subscription' },
+    USDT: { amount: 99,   currency: 'USD',  description: 'PryroTender Annual Subscription' },
+  },
 };
 
 async function getToken() {
@@ -39,8 +45,9 @@ async function getOrRegisterIPN(token: string, db: ReturnType<typeof supabaseAdm
 
 export async function POST(req: NextRequest) {
   try {
-    const { plan, email, userId } = await req.json();
-    const planData = PLANS[plan as keyof typeof PLANS];
+    const { plan, email, userId, currency } = await req.json();
+    const selectedCurrency = (currency === 'USDT' ? 'USDT' : 'RWF') as 'RWF' | 'USDT';
+    const planData = PLANS[plan as keyof typeof PLANS]?.[selectedCurrency];
     if (!planData) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
 
     const token = await getToken();

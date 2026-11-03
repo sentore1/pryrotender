@@ -231,6 +231,16 @@ function DashboardContent() {
   const [customProposal, setCustomProposal] = useState('');
   const isResizing = useRef(false);
 
+  // Read selected sources from URL — empty = show all
+  const sourcesParam = params.get('sources') || '';
+  const selectedSources = sourcesParam ? sourcesParam.split(',') : [];
+
+  // Apply source filter client-side
+  const filterBySource = (list: Tender[]) => {
+    if (!selectedSources.length) return list;
+    return list.filter(t => selectedSources.includes(t.source));
+  };
+
   const startResize = (e: React.MouseEvent) => {
     isResizing.current = true;
     const startX = e.clientX; const startW = panelWidth;
@@ -343,8 +353,9 @@ function DashboardContent() {
     } catch { setError('Error generating proposal.'); } finally { setCustomGenerating(false); }
   };
 
-  const open = tenders.filter(t => !t.deadline?.toLowerCase().includes('closed'));
-  const closed = tenders.filter(t => t.deadline?.toLowerCase().includes('closed'));
+  const visibleTenders = filterBySource(tenders);
+  const open = visibleTenders.filter(t => !t.deadline?.toLowerCase().includes('closed'));
+  const closed = visibleTenders.filter(t => t.deadline?.toLowerCase().includes('closed'));
 
   if (customMode) return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -408,7 +419,7 @@ function DashboardContent() {
         <button onClick={() => fetchTenders(searchInput)} disabled={loading} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
           {loading ? 'Loading...' : 'Search'}
         </button>
-        <span className="ml-auto px-2.5 py-1 bg-blue-600 text-white rounded-md text-sm font-semibold">{tenders.length} tenders</span>
+        <span className="ml-auto px-2.5 py-1 bg-blue-600 text-white rounded-md text-sm font-semibold">{visibleTenders.length} tenders</span>
       </header>
       <div className="flex-1 overflow-hidden flex relative">
         <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">

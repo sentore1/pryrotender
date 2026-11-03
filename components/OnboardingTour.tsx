@@ -21,7 +21,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
         <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
       </svg>
@@ -34,7 +34,7 @@ const STEPS: TourStep[] = [
     placement: 'bottom',
     pulse: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     ),
@@ -46,7 +46,7 @@ const STEPS: TourStep[] = [
     placement: 'right',
     pulse: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
       </svg>
     ),
@@ -59,7 +59,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14 2 14 8 20 8"/>
         <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
@@ -74,7 +74,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
     ),
@@ -87,7 +87,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
       </svg>
     ),
@@ -100,7 +100,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/>
         <line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/>
       </svg>
@@ -114,7 +114,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 20h9"/>
         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
       </svg>
@@ -128,7 +128,7 @@ const STEPS: TourStep[] = [
     pulse: true,
     desktopOnly: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
       </svg>
@@ -145,7 +145,7 @@ const MOBILE_STEPS: TourStep[] = [
     placement: 'bottom',
     pulse: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     ),
@@ -157,7 +157,7 @@ const MOBILE_STEPS: TourStep[] = [
     placement: 'bottom',
     pulse: true,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
       </svg>
     ),
@@ -169,7 +169,7 @@ const MOBILE_STEPS: TourStep[] = [
     placement: 'bottom',
     pulse: false,
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
     ),
@@ -324,13 +324,13 @@ export default function OnboardingTour() {
   const vw = typeof window !== 'undefined' ? window.innerWidth  : 1920;
   const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
-  // ── Shared card content ───────────────────────────────────────────────────
-  const CardContent = () => (
+  // ── Shared card content (inline JSX, NOT a component — avoids remount on every render) ──
+  const cardContent = (
     <>
       {/* Progress bar */}
-      <div className="h-0.5 bg-gray-100 overflow-hidden" style={{ borderRadius: isMobile ? '12px 12px 0 0' : '6px 6px 0 0' }}>
+      <div className="h-1 bg-gray-100 overflow-hidden" style={{ borderRadius: isMobile ? '12px 12px 0 0' : '6px 6px 0 0' }}>
         <div
-          className="h-full bg-blue-600 transition-all duration-300"
+          className="h-full bg-gray-400 transition-all duration-300"
           style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
         />
       </div>
@@ -349,7 +349,7 @@ export default function OnboardingTour() {
         {/* Icon + Title */}
         <div className="flex items-center gap-3 mb-2.5">
           <h3 className="text-base font-bold text-gray-900 leading-snug flex-1">{current.title}</h3>
-          <div className="shrink-0 w-10 h-10 rounded-md bg-blue-600 text-white flex items-center justify-center">
+          <div className="shrink-0 w-16 h-16 rounded-md flex items-center justify-center text-gray-400">
             {current.icon}
           </div>
         </div>
@@ -376,7 +376,10 @@ export default function OnboardingTour() {
         </div>
 
         <button onClick={next}
-          className="text-sm font-semibold px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+          className="text-sm font-semibold px-4 py-2 text-white transition"
+          style={{ borderRadius: 4, backgroundColor: '#0084FF' }}
+          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0070d8')}
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0084FF')}>
           {isLast ? 'Done' : 'Next →'}
         </button>
       </div>
@@ -385,9 +388,17 @@ export default function OnboardingTour() {
 
   return (
     <>
-      {/* ── SVG backdrop spotlight ── */}
+      {/* ── Invisible interaction layer — captures backdrop clicks, lets card clicks through ── */}
+      <div
+        className="fixed inset-0 z-[9998]"
+        style={{ pointerEvents: 'auto' }}
+        onClick={dismiss}
+      />
+
+      {/* ── SVG backdrop spotlight — purely visual, no pointer events ── */}
       <svg
         className="fixed inset-0 z-[9998] pointer-events-none"
+        style={{ pointerEvents: 'none' }}
         width={vw} height={vh}
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -402,13 +413,13 @@ export default function OnboardingTour() {
         <rect width={vw} height={vh} fill="rgba(0,0,0,0.55)" mask="url(#spotlight-mask)" />
         {rect && (
           <rect x={rect.left} y={rect.top} width={rect.width} height={rect.height} rx={8}
-            fill="none" stroke="#3b82f6" strokeWidth={2} opacity={0.9} />
+            fill="none" stroke="#9ca3af" strokeWidth={2} opacity={0.9} />
         )}
       </svg>
 
       {/* ── Pulse ring ── */}
       {rect && current.pulse && (
-        <div className="fixed z-[9998] pointer-events-none" style={{
+        <div className="fixed z-[10000] pointer-events-none" style={{
           top: rect.top - 4, left: rect.left - 4,
           width: rect.width + 8, height: rect.height + 8,
           borderRadius: 10,
@@ -420,17 +431,18 @@ export default function OnboardingTour() {
       {/* ── MOBILE: bottom sheet ── */}
       {isMobile && (
         <div
-          className="fixed bottom-0 left-0 right-0 z-[9999] bg-white shadow-[0_-4px_30px_rgba(0,0,0,0.18)]"
+          className="fixed bottom-0 left-0 right-0 z-[10000] bg-white shadow-[0_-4px_30px_rgba(0,0,0,0.18)] pointer-events-auto"
           style={{ borderRadius: '16px 16px 0 0', border: '1px solid #f3f4f6' }}
+          onClick={e => e.stopPropagation()}
         >
-          <CardContent />
+          {cardContent}
         </div>
       )}
 
       {/* ── DESKTOP: floating positioned card ── */}
       {!isMobile && (
         <div
-          className="fixed z-[9999] bg-white shadow-2xl flex flex-col"
+          className="fixed z-[10000] bg-white shadow-2xl flex flex-col pointer-events-auto"
           style={{
             top: pos.top,
             left: pos.left,
@@ -439,16 +451,17 @@ export default function OnboardingTour() {
             transition: 'top 0.25s ease, left 0.25s ease',
             border: '1px solid #f3f4f6',
           }}
+          onClick={e => e.stopPropagation()}
         >
-          <CardContent />
+          {cardContent}
         </div>
       )}
 
       <style>{`
         @keyframes tour-pulse {
-          0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
-          70%  { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
-          100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+          0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); }
+          70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+          100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
         }
       `}</style>
     </>

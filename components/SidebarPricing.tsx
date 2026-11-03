@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { PRICES } from '@/lib/pricing';
 
 const FEATURES = [
   'All tenders access',
@@ -16,35 +17,16 @@ const FEATURES = [
   'Email notifications',
 ];
 
-const PLANS = {
-  monthly: {
-    label: 'Monthly',
-    rwf: '12,000 RWF',
-    usd: '$10',
-    period: '/mo',
-    sub: 'Billed monthly',
-    save: null,
-    href: '/register?plan=monthly',
-  },
-  annual: {
-    label: 'Annual',
-    rwf: '100,000 RWF',
-    usd: '$99',
-    period: '/yr',
-    sub: 'Billed once a year',
-    save: 'Save ~17% vs monthly',
-    href: '/register?plan=annual',
-  },
-} as const;
-
-type Tab = keyof typeof PLANS;
-type Currency = 'RWF' | 'USD';
+type Tab = 'monthly' | 'annual';
+type Currency = 'RWF' | 'USDT';
 
 export default function SidebarPricing() {
   const [tab, setTab] = useState<Tab>('monthly');
   const [currency, setCurrency] = useState<Currency>('RWF');
-  const plan = PLANS[tab];
-  const price = currency === 'RWF' ? plan.rwf : plan.usd;
+  const prices = PRICES[currency];
+  const price = tab === 'monthly' ? prices.monthly : prices.annual;
+  const period = tab === 'monthly' ? prices.monthlySub : prices.annualSub;
+  const save = tab === 'annual' ? prices.save : null;
 
   return (
     <div className="overflow-hidden shadow-md border border-gray-100" style={{ borderRadius: 4 }}>
@@ -56,18 +38,18 @@ export default function SidebarPricing() {
 
         {/* Plan tabs */}
         <div className="flex bg-blue-700 p-0.5 gap-0.5" style={{ borderRadius: 4 }}>
-          {(Object.keys(PLANS) as Tab[]).map((t) => (
+          {(['monthly', 'annual'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex-1 py-1.5 text-xs font-semibold transition-all capitalize ${
                 tab === t
                   ? 'bg-white text-gray-900 shadow'
                   : 'text-blue-200 hover:text-white'
               }`}
               style={{ borderRadius: 4 }}
             >
-              {PLANS[t].label}
+              {t}
               {t === 'annual' && (
                 <span className="ml-1 text-[10px] font-bold text-green-400">-17%</span>
               )}
@@ -80,7 +62,7 @@ export default function SidebarPricing() {
       <div className="bg-white px-4 py-4 border-b border-gray-100">
         {/* Currency toggle */}
         <div className="flex bg-gray-100 p-0.5 gap-0.5 mb-3 w-fit mx-auto" style={{ borderRadius: 4 }}>
-          {(['RWF', 'USD'] as Currency[]).map((c) => (
+          {(['RWF', 'USDT'] as Currency[]).map((c) => (
             <button
               key={c}
               onClick={() => setCurrency(c)}
@@ -99,12 +81,11 @@ export default function SidebarPricing() {
         <div className="text-center">
           <div className="flex items-end justify-center gap-1">
             <span className="text-2xl font-bold text-gray-900 leading-none">{price}</span>
-            <span className="text-xs text-gray-400 mb-0.5">{plan.period}</span>
+            <span className="text-xs text-gray-400 mb-0.5">{period}</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">{plan.sub}</p>
-          {plan.save && (
+          {save && (
             <span className="inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 bg-green-600 text-white rounded-full">
-              {plan.save}
+              {save}
             </span>
           )}
         </div>
@@ -131,13 +112,13 @@ export default function SidebarPricing() {
       {/* CTA */}
       <div className="bg-white px-4 py-3">
         <Link
-          href={plan.href}
+          href={`/register?plan=${tab}&currency=${currency}`}
           className="block text-center py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition"
           style={{ borderRadius: 4 }}
         >
           Get Started →
         </Link>
-        <p className="text-center text-xs text-gray-400 mt-2">No credit card required</p>
+        <p className="text-center text-xs text-gray-400 mt-2">Cancel anytime. No hidden fees.</p>
       </div>
     </div>
   );

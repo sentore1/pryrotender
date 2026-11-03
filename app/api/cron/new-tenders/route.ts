@@ -4,8 +4,8 @@ import { sendEmail } from '@/lib/mail';
 import { scrapeTenders, Tender } from '@/lib/scraper';
 import { generateTenderSlug, generateUniqueSlug, submitIndexNow } from '@/lib/seo';
 
-// Allow up to 60 seconds — scraping two external sites + sending emails needs time
-export const maxDuration = 60;
+// Allow up to 90 seconds — scraping three external sites + sending emails needs time
+export const maxDuration = 90;
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('x-cron-secret');

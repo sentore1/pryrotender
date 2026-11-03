@@ -298,16 +298,14 @@ export default async function CategoryPage({
                             {isExpired ? 'Closed: ' : 'Deadline: '}{formatDeadline(row.deadline ?? 'Not specified')}
                           </span>
                           <span className="text-xs font-semibold text-blue-600">
-                            {row.slug ? 'View details' : 'Generate proposal'}
+                            Generate proposal
                           </span>
                         </div>
                       </div>
                     );
 
-                    return row.slug ? (
-                      <Link key={row.id} href={`/tenders/${row.slug}`} className="block">{cardContent}</Link>
-                    ) : (
-                      <Link key={row.id} href="/register" className="block">{cardContent}</Link>
+                    return (
+                      <Link key={row.id} href="/dashboard" className="block">{cardContent}</Link>
                     );
                   })}
                 </div>

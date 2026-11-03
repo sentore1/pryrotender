@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
+import { PRICES } from '@/lib/pricing';
 
 const FEATURES_MONTHLY = [
   'All tenders access',
@@ -17,10 +18,6 @@ const FEATURES_MONTHLY = [
 
 const FEATURES_ANNUAL = [...FEATURES_MONTHLY, 'Priority support'];
 
-const PRICES = {
-  RWF: { monthly: '100 RWF', annual: '100 RWF', save: 'Save 100 RWF vs monthly' },
-  USDT: { monthly: '$10 USDT', annual: '$99 USDT', save: 'Save $21 USDT vs monthly' },
-};
 
 export default function PricingSection() {
   const [currency, setCurrency] = React.useState<'RWF' | 'USDT'>('RWF');

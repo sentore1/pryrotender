@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { PRICES } from '@/lib/pricing';
 
 function RegisterForm() {
   const router = useRouter();
@@ -12,10 +13,7 @@ function RegisterForm() {
   const [step, setStep] = useState<'details' | 'payment'>(reason === 'subscription' ? 'payment' : 'details');
   const [plan, setPlan] = useState<'monthly' | 'annual'>(params.get('plan') === 'annual' ? 'annual' : 'monthly');
   const currency = (params.get('currency') || 'RWF') as 'RWF' | 'USDT';
-  const planPrices = {
-    RWF: { monthly: '100 RWF', annual: '100 RWF', monthlySub: '/month', annualSub: '/year · save 100 RWF' },
-    USDT: { monthly: '$10', annual: '$99', monthlySub: '/month', annualSub: '/year · save $21' },
-  };
+  const planPrices = PRICES;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState('');
@@ -50,7 +48,7 @@ function RegisterForm() {
       const res = await fetch('/api/pesapal/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, email: resolvedEmail, userId: resolvedUserId }),
+        body: JSON.stringify({ plan, email: resolvedEmail, userId: resolvedUserId, currency }),
       });
       const data = await res.json();
       if (data.redirect_url) window.location.href = data.redirect_url;
@@ -60,28 +58,40 @@ function RegisterForm() {
   };
 
   if (step === 'payment') return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-          <div className="text-center mb-2">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 space-y-5">
+          <div className="text-center mb-1">
             <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
             <h1 className="text-lg font-bold text-gray-900 mt-3">Choose your plan</h1>
           </div>
-          {reason === 'subscription' && <div className="px-3 py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-sm">You need an active subscription to access the platform.</div>}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {reason === 'subscription' && (
+            <p className="text-sm text-red-500 font-medium text-center">
+              You need an active subscription to access the platform.
+            </p>
+          )}
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
           <div className="grid grid-cols-2 gap-3">
             {(['monthly', 'annual'] as const).map(p => (
               <button key={p} onClick={() => setPlan(p)}
-                className={`p-4 rounded-xl border-2 text-left transition ${plan === p ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                <div className="text-xs font-semibold text-gray-500 capitalize mb-1">{p}</div>
-                <div className="text-lg font-bold text-gray-900">{p === 'monthly' ? planPrices[currency].monthly : planPrices[currency].annual}</div>
-                <div className="text-xs text-gray-400">{p === 'monthly' ? planPrices[currency].monthlySub : planPrices[currency].annualSub}</div>
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  plan === p
+                    ? 'border-blue-600 bg-blue-600'
+                    : 'border-gray-200 bg-white hover:border-gray-400'
+                }`}>
+                <div className={`text-xs font-semibold capitalize mb-1 ${plan === p ? 'text-blue-100' : 'text-gray-500'}`}>{p}</div>
+                <div className={`text-lg font-bold ${plan === p ? 'text-white' : 'text-gray-900'}`}>
+                  {p === 'monthly' ? planPrices[currency].monthly : planPrices[currency].annual}
+                </div>
+                <div className={`text-xs ${plan === p ? 'text-blue-200' : 'text-gray-400'}`}>
+                  {p === 'monthly' ? planPrices[currency].monthlySub : planPrices[currency].annualSub}
+                </div>
               </button>
             ))}
           </div>
           <button onClick={handlePayment} disabled={loading}
-            className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">
-            {loading ? 'Redirecting...' : `Pay with Pesapal`}
+            className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 disabled:opacity-50 transition text-sm tracking-wide">
+            {loading ? 'Redirecting...' : 'Pay with Pesapal'}
           </button>
         </div>
       </div>

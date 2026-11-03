@@ -125,26 +125,13 @@ function TenderCard({ row }: { row: TenderRow }) {
           <span>{isExpired ? 'Closed:' : 'Deadline:'}</span>
           <span>{formatDeadline(row.deadline ?? 'Not specified')}</span>
         </span>
-        {row.slug ? (
-          <span className="text-xs font-semibold text-blue-600">View details</span>
-        ) : (
-          <span className="text-xs font-semibold text-blue-600">Generate proposal</span>
-        )}
+        <span className="text-xs font-semibold text-blue-600">Generate proposal</span>
       </div>
     </div>
   );
 
-  if (row.slug) {
-    return (
-      <Link href={`/tenders/${row.slug}`} className="block">
-        {card}
-      </Link>
-    );
-  }
-
-  // No slug yet (live scrape fallback) — link to register
   return (
-    <Link href="/register" className="block">
+    <Link href="/dashboard" className="block">
       {card}
     </Link>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { buildSiteJsonLd } from '@/lib/seo';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tender.pryro.com';
 
@@ -39,7 +40,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
         />
       </head>
-      <body className="min-h-full flex flex-col" style={{fontFamily:'Inter,system-ui,sans-serif'}}>{children}</body>
+      <body className="min-h-full flex flex-col" style={{fontFamily:'Inter,system-ui,sans-serif'}}>
+        {/* Track anonymous landing page visitors — userId null, not admin */}
+        <AnalyticsTracker />
+        {children}
+      </body>
     </html>
   );
 }

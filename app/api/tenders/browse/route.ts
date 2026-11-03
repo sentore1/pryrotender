@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams;
     const query = sp.get('q') ?? '';
     const category = sp.get('category') ?? '';
+    const source = sp.get('source') ?? '';
     const page = Math.max(1, parseInt(sp.get('page') ?? '1', 10));
 
     const db = supabaseAdmin();
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
 
     if (query.trim()) q = q.ilike('title', `%${query.trim()}%`);
     if (category.trim()) q = q.ilike('category', `%${category.trim()}%`);
+    if (source.trim()) q = q.eq('source', source.trim());
 
     const { data, count, error } = await q;
 
@@ -101,6 +103,11 @@ export async function GET(request: NextRequest) {
         if (query.trim()) {
           const q2 = query.trim().toLowerCase();
           scraped = scraped.filter(r => r.title.toLowerCase().includes(q2));
+        }
+
+        // Apply source filter
+        if (source.trim()) {
+          scraped = scraped.filter(r => r.source === source.trim());
         }
 
         total = scraped.length;

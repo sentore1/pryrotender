@@ -10,6 +10,15 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Brand blue — replaces Tailwind's default blue-600 (#2563eb) site-wide */
+  --color-blue-600: #0085FF;
+  /* Slightly darker for hover states (blue-700) */
+  --color-blue-700: #0070d9;
+  /* Lighter tint for focus rings / bg-blue-50 */
+  --color-blue-50:  #e5f3ff;
+  /* blue-500 used in some chart bars */
+  --color-blue-500: #1a90ff;
 }
 
 body {
