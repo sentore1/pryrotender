@@ -16,7 +16,7 @@ import {
   CATEGORY_LABELS,
   CATEGORY_SLUGS,
 } from '@/lib/seo';
-import { scrapeTenders, Tender } from '@/lib/scraper';
+import { scrapeTenders, searchTenders, Tender } from '@/lib/scraper';
 
 const PAGE_SIZE = 24;
 
@@ -53,7 +53,12 @@ async function getStoredTenders(
     .range(from, to);
 
   if (query.trim()) {
-    q = q.ilike('title', `%${query.trim()}%`);
+    // Search across title, description, and organization so users can find
+    // tenders by any of those fields, not just the title.
+    // Commas are stripped because PostgREST's "or" syntax uses commas as
+    // condition separators.
+    const term = query.trim().replace(/,/g, ' ');
+    q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%,organization.ilike.%${term}%`);
   }
   if (category.trim()) {
     q = q.ilike('category', `%${category.trim()}%`);
@@ -163,11 +168,37 @@ export async function TendersBrowser({
 
   ({ rows, total } = await getStoredTenders(page, query, category));
 
-  // 2. If DB has nothing yet, fall back to a live scrape (shows something on day 1)
-  if (rows.length === 0 && page === 1 && !query && !category) {
+  // 2. If DB has nothing, fall back to a live scrape.
+  //    This covers two cases:
+  //      a) Day-1 deployment with an empty DB (no query, no category)
+  //      b) A search that doesn't match anything in the DB yet — the tender
+  //         may exist on Umucyo but hasn't been ingested by the cron job.
+  //    In case (b) we use searchTenders() which calls Umucyo's built-in search
+  //    API (?tendNm=<keyword>) so we can find tenders that are too old to
+  //    appear in the default 4-page scrape.
+  if (rows.length === 0 && page === 1) {
     try {
-      const live = await scrapeTenders('');
-      rows = live.map(liveToRow);
+      let live: Tender[];
+
+      if (query.trim()) {
+        // Use the search API to find tenders matching the query across ALL
+        // of Umucyo (not just the latest pages), plus filtered results from
+        // other sources.
+        live = await searchTenders(query);
+      } else {
+        // No query — just scrape the latest tenders from all sources
+        live = await scrapeTenders('');
+      }
+
+      let liveRows = live.map(liveToRow);
+
+      // Filter by category if specified (applies to both paths)
+      if (category.trim()) {
+        const cat = category.trim().toLowerCase();
+        liveRows = liveRows.filter(r => (r.category ?? '').toLowerCase().includes(cat));
+      }
+
+      rows = liveRows;
       total = rows.length;
       usingLiveFallback = true;
     } catch {

@@ -359,6 +359,18 @@ export default function AnalyseTenderPage() {
   const [emailStatus, setEmailStatus] = useState('');
   const [companyName, setCompanyName] = useState('');
 
+  // Missing items modal
+  type MissingItemUI = { name: string; description?: string; unit?: string; estimated_qty?: number; unit_price?: string; margin_pct?: string; saved?: boolean };
+  const [missingItems, setMissingItems] = useState<MissingItemUI[]>([]);
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingItemSaving, setMissingItemSaving] = useState<string | null>(null);
+  const [missingItemMsg, setMissingItemMsg] = useState('');
+  // Supplier quote link for missing items
+  const [missingQuoteLink, setMissingQuoteLink] = useState('');
+  const [missingQuoteSupplier, setMissingQuoteSupplier] = useState('');
+  const [missingQuoteLoading, setMissingQuoteLoading] = useState(false);
+  const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+
   // Load the subscriber's company name once, so we can sign composed emails.
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -470,6 +482,26 @@ export default function AnalyseTenderPage() {
           refNumber: refNumber || data.profile?.refNumber,
         });
         setView('proposal');
+
+        // Show missing items modal if the AI detected items not in the user's catalogue
+        if (data.missingItems?.length) {
+          setMissingItems(data.missingItems.map((item: any) => ({
+            ...item,
+            unit_price: '',
+            margin_pct: '0',
+            saved: false,
+          })));
+          // Lazy-load suppliers list for the "ask supplier" option
+          try {
+            const { data: { session: sess } } = await supabase.auth.getSession();
+            if (sess?.access_token) {
+              const supRes = await fetch('/api/suppliers', { headers: { Authorization: `Bearer ${sess.access_token}` } });
+              const supData = await supRes.json();
+              if (supData.success) setSuppliersList(supData.suppliers.map((s: any) => ({ id: s.id, name: s.name })));
+            }
+          } catch { /* non-critical */ }
+          setShowMissingModal(true);
+        }
       } else {
         setError(data.error || 'Failed to generate proposal.');
       }
@@ -752,6 +784,162 @@ export default function AnalyseTenderPage() {
                     Set up your sender account in <a href="/settings" className="text-blue-600 underline">Settings → Email</a>.
                   </p>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Missing items modal ── */}
+        {showMissingModal && missingItems.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800">⚠️ Items Missing from Your Pricing Catalogue</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">The tender requires {missingItems.length} item{missingItems.length > 1 ? 's' : ''} not in your catalogue. Add them now or ask a supplier.</p>
+                </div>
+                <button onClick={() => setShowMissingModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0 ml-2">×</button>
+              </div>
+
+              <div className="p-5 space-y-3">
+                {missingItems.map((item, idx) => (
+                  <div key={idx} className={`border rounded-lg p-3 ${item.saved ? 'border-green-200 bg-green-50/50' : 'border-gray-200'}`}>
+                    {item.saved ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600 font-bold text-sm">✓</span>
+                        <span className="text-sm font-medium text-gray-800">{item.name}</span>
+                        <span className="text-xs text-gray-400">— saved to catalogue</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                            {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+                            <div className="flex flex-wrap gap-2 mt-0.5">
+                              {item.unit && <span className="text-xs text-gray-400">Unit: {item.unit}</span>}
+                              {item.estimated_qty && <span className="text-xs text-gray-400">Est. qty: {item.estimated_qty}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[10px] text-gray-500 block">Unit Price</label>
+                            <input type="number" min="0" step="0.01" value={item.unit_price}
+                              onChange={e => setMissingItems(prev => prev.map((p, j) => j === idx ? { ...p, unit_price: e.target.value } : p))}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 block">Margin %</label>
+                            <input type="number" min="0" step="0.1" value={item.margin_pct}
+                              onChange={e => setMissingItems(prev => prev.map((p, j) => j === idx ? { ...p, margin_pct: e.target.value } : p))}
+                              placeholder="0"
+                              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </div>
+                          <div className="flex items-end">
+                            <button
+                              onClick={async () => {
+                                setMissingItemSaving(item.name);
+                                const { data: { session } } = await supabase.auth.getSession();
+                                if (!session?.access_token) { setMissingItemSaving(null); return; }
+                                const saveRes = await fetch('/api/pricing-items', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                                  body: JSON.stringify({
+                                    name: item.name,
+                                    description: item.description || '',
+                                    unit: item.unit || '',
+                                    unit_price: Number(item.unit_price) || 0,
+                                    currency: 'RWF',
+                                    category: 'goods',
+                                    margin_pct: Number(item.margin_pct) || 0,
+                                  }),
+                                });
+                                const saveData = await saveRes.json();
+                                if (saveData.success) {
+                                  setMissingItems(prev => prev.map((p, j) => j === idx ? { ...p, saved: true } : p));
+                                  setMissingItemMsg(`✓ "${item.name}" added to your catalogue!`);
+                                } else {
+                                  setMissingItemMsg(saveData.error || 'Failed to save item.');
+                                }
+                                setMissingItemSaving(null);
+                                setTimeout(() => setMissingItemMsg(''), 4000);
+                              }}
+                              disabled={!item.unit_price || missingItemSaving === item.name}
+                              className="w-full py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                              {missingItemSaving === item.name ? 'Saving...' : 'Add'}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+
+                {/* Ask a supplier section */}
+                <div className="border-t border-gray-100 pt-4 space-y-2">
+                  <p className="text-xs font-semibold text-gray-600">Don't know the prices? Ask a supplier:</p>
+                  <div className="flex gap-2">
+                    <select value={missingQuoteSupplier} onChange={e => setMissingQuoteSupplier(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select supplier...</option>
+                      {suppliersList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                    <button
+                      onClick={async () => {
+                        setMissingQuoteLoading(true); setMissingQuoteLink('');
+                        const { data: { session } } = await supabase.auth.getSession();
+                        if (!session?.access_token) { setMissingQuoteLoading(false); return; }
+                        const items = missingItems.filter(i => !i.saved).map(i => ({
+                          name: i.name,
+                          description: i.description || '',
+                          unit: i.unit || '',
+                          qty: i.estimated_qty || 1,
+                        }));
+                        const suppId = suppliersList.find(s => s.name === missingQuoteSupplier)?.id;
+                        const res = await fetch('/api/supplier-quote/create', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                          body: JSON.stringify({ supplierId: suppId || null, title: 'Price Request — Missing Items', items }),
+                        });
+                        const data = await res.json();
+                        if (data.success) setMissingQuoteLink(data.url);
+                        setMissingQuoteLoading(false);
+                      }}
+                      disabled={missingQuoteLoading || missingItems.every(i => i.saved)}
+                      className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50">
+                      {missingQuoteLoading ? 'Generating...' : '🔗 Ask Supplier'}
+                    </button>
+                  </div>
+                  {missingQuoteLink && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                      <input type="text" readOnly value={missingQuoteLink}
+                        className="flex-1 px-2 py-1.5 bg-white border border-green-200 rounded text-xs text-gray-600" />
+                      <button onClick={() => navigator.clipboard.writeText(missingQuoteLink)}
+                        className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700">Copy</button>
+                      {(() => {
+                        const supp = suppliersList.find(s => s.name === missingQuoteSupplier);
+                        return supp ? (
+                          <a href={`https://wa.me/${(supp as any).whatsapp || ''}`.replace(/[^0-9]/g, '')} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-green-600 hover:text-green-700 font-medium px-2">WhatsApp →</a>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {missingItemMsg && <p className={`text-xs font-medium ${missingItemMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{missingItemMsg}</p>}
+
+                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                  <button onClick={() => setShowMissingModal(false)}
+                    className="flex-1 py-2.5 bg-gray-100 text-gray-600 font-semibold rounded-lg hover:bg-gray-200 text-sm">
+                    {missingItems.every(i => i.saved) ? 'Done' : 'Skip for now'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 text-center">
+                  Saved items won't be asked again next time you generate a proposal.
+                </p>
               </div>
             </div>
           </div>

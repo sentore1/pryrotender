@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateProposal } from '@/lib/groq';
+import { generateProposal, extractMissingItems } from '@/lib/groq';
 
 function supabaseWithToken(token: string) {
   return createClient(
@@ -61,6 +61,12 @@ export async function POST(request: NextRequest) {
               .single();
 
             if (profile) {
+              // Fetch pricing items to inject into the proposal
+              const { data: priceItems } = await client
+                .from('pricing_items')
+                .select('name,description,unit,unit_price,currency,category,margin_pct')
+                .eq('user_id', user.id);
+
               enrichedCompanyInfo = {
                 name: profile.company_name,
                 address: profile.company_address,
@@ -73,6 +79,7 @@ export async function POST(request: NextRequest) {
                 bio: profile.company_bio,
                 requiredDocuments: profile.required_documents,
                 formerClients: profile.former_clients,
+                pricingItems: priceItems || [],
               };
             }
           }
@@ -81,6 +88,21 @@ export async function POST(request: NextRequest) {
     }
 
     const proposal = await generateProposal(tenderDetails, requirements, enrichedCompanyInfo);
+
+    // Detect items in the tender that aren't in the user's pricing catalogue
+    let missingItems: { name: string; description?: string; unit?: string; estimated_qty?: number }[] = [];
+    if (userId && token) {
+      try {
+        const client = supabaseWithToken(token);
+        const { data: existingItems } = await client
+          .from('pricing_items')
+          .select('name,category')
+          .eq('user_id', userId);
+        missingItems = await extractMissingItems(tenderDetails, existingItems || []);
+      } catch (e) {
+        console.error('Failed to extract missing items:', e);
+      }
+    }
 
     // Save to proposals table if we have a user
     if (userId && token) {
@@ -98,7 +120,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, proposal });
+    return NextResponse.json({ success: true, proposal, missingItems });
   } catch (error) {
     console.error('Error generating proposal:', error);
     return NextResponse.json(

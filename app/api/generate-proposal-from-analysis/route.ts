@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateProposal } from '@/lib/groq';
+import { generateProposal, extractMissingItems } from '@/lib/groq';
 
 // Helper: build a per-request Supabase client that forwards the user's auth token
 function supabaseWithToken(token: string) {
@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .single();
 
+    // Fetch pricing items to inject into the proposal
+    const { data: priceItems } = await client
+      .from('pricing_items')
+      .select('name,description,unit,unit_price,currency,category,margin_pct')
+      .eq('user_id', user.id);
+
     const refNumber = profile?.company_ref_prefix
       ? `${profile.company_ref_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
       : undefined;
@@ -79,6 +85,7 @@ export async function POST(request: NextRequest) {
       bio: profile?.company_bio,
       requiredDocuments: profile?.required_documents,
       formerClients: profile?.former_clients,
+      pricingItems: priceItems || [],
     };
 
     const tenderDetails = `Tender: ${tenderName || 'Tender'}\n\nAnalysis Summary:\n${analysis}`;
@@ -87,6 +94,12 @@ export async function POST(request: NextRequest) {
       : 'General requirements as per tender analysis above';
 
     const proposalContent = await generateProposal(tenderDetails, requirements, companyInfo);
+
+    // Detect items in the tender that aren't in the user's pricing catalogue
+    const missingItems = await extractMissingItems(
+      tenderDetails,
+      (priceItems || []).map((i: any) => ({ name: i.name, category: i.category }))
+    );
 
     const { data: saved, error: saveErr } = await client
       .from('proposals')
@@ -106,6 +119,7 @@ export async function POST(request: NextRequest) {
       success: true,
       proposal: proposalContent,
       proposalId: saved?.id,
+      missingItems,
       profile: {
         logoUrl: profile?.logo_url,
         signatureUrl: profile?.signature_url,

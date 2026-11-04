@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { scrapeTenders, Tender } from '@/lib/scraper';
+import { scrapeTenders, searchTenders, Tender } from '@/lib/scraper';
 
 const PAGE_SIZE = 24;
 
@@ -70,7 +70,10 @@ export async function GET(request: NextRequest) {
       .order('first_seen_at', { ascending: false })
       .range(from, to);
 
-    if (query.trim()) q = q.ilike('title', `%${query.trim()}%`);
+    if (query.trim()) {
+      const term = query.trim().replace(/,/g, ' ');
+      q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%,organization.ilike.%${term}%`);
+    }
     if (category.trim()) q = q.ilike('category', `%${category.trim()}%`);
     if (source.trim()) q = q.eq('source', source.trim());
 
@@ -83,11 +86,20 @@ export async function GET(request: NextRequest) {
     let rows: TenderRow[] = (data ?? []) as TenderRow[];
     let total = count ?? 0;
 
-    // Fallback to live scrape when DB is empty (day-1 deployment)
+    // Fallback to live scrape when DB returns no results.
+    // When there's a search query, use searchTenders() which calls Umucyo's
+    // built-in search API to find tenders across ALL pages (not just the
+    // latest 4 pages), plus filtered results from other sources.
     if (rows.length === 0) {
       try {
-        // Scrape everything, then filter + paginate client-side
-        const live = await scrapeTenders('');
+        let live: Tender[];
+
+        if (query.trim()) {
+          live = await searchTenders(query);
+        } else {
+          live = await scrapeTenders('');
+        }
+
         let scraped = live.map(liveToRow);
 
         // Filter by category using keyword mapping
@@ -97,12 +109,6 @@ export async function GET(request: NextRequest) {
             const haystack = `${r.title} ${r.category} ${r.organization ?? ''} ${r.location ?? ''}`.toLowerCase();
             return keywords.some(kw => haystack.includes(kw));
           });
-        }
-
-        // Apply text search
-        if (query.trim()) {
-          const q2 = query.trim().toLowerCase();
-          scraped = scraped.filter(r => r.title.toLowerCase().includes(q2));
         }
 
         // Apply source filter

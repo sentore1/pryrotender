@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTenders } from '@/lib/scraper';
+import { scrapeTenders, searchTenders } from '@/lib/scraper';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category') || '';
-    
-    const tenders = await scrapeTenders(category);
-    
+
+    // When a search term is provided, use searchTenders() which calls
+    // Umucyo's built-in search API (?tendNm=<keyword>) to find tenders
+    // across ALL pages — not just the latest 4 pages that scrapeTenders
+    // grabs. This ensures older tenders (like one published a week ago
+    // that has been pushed off page 4) are still findable.
+    const tenders = category.trim()
+      ? await searchTenders(category)
+      : await scrapeTenders('');
+
     return NextResponse.json({
       success: true,
       tenders,

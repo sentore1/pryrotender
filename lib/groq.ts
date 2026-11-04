@@ -5,7 +5,7 @@ const GROQ_MODEL = 'qwen/qwen3.8-27b';
 export async function generateProposal(
   tenderDetails: string,
   requirements: string,
-  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string; bio?: string; requiredDocuments?: string[]; formerClients?: { name: string; project: string }[] }
+  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string; bio?: string; requiredDocuments?: string[]; formerClients?: { name: string; project: string }[]; pricingItems?: { name: string; description?: string; unit?: string; unit_price: number; currency?: string; category?: string; margin_pct?: number }[] }
 ): Promise<string> {
   if (!hasGroqKey()) {
     return generateMockProposal(tenderDetails, requirements, companyInfo);
@@ -23,6 +23,16 @@ export async function generateProposal(
     ? `\nFORMER CLIENTS & PROJECTS (use these in the experience section):\n${co.formerClients.map(c => `- ${c.name}${c.project ? ': ' + c.project : ''}`).join('\n')}`
     : '';
 
+  // Build pricing items section — these are the user's catalogue prices to use in the budget
+  const pricingSection = co.pricingItems?.length
+    ? `\n\nPRICING CATALOGUE (use these exact prices in the budget/cost breakdown where applicable):\n${co.pricingItems.map(item => {
+        const margin = item.margin_pct || 0;
+        const finalPrice = margin > 0 ? item.unit_price * (1 + margin / 100) : item.unit_price;
+        const marginNote = margin > 0 ? ` (includes ${margin}% margin → ${Math.round(finalPrice)} ${item.currency || 'RWF'})` : '';
+        return `- ${item.name}${item.unit ? ` (${item.unit})` : ''}: ${item.unit_price} ${item.currency || 'RWF'}${marginNote}${item.description ? ` — ${item.description}` : ''}`;
+      }).join('\n')}`
+    : '';
+
   const prompt = `You are an expert procurement proposal writer in Rwanda with 15+ years of experience writing winning tenders.
 
 SUBMITTING COMPANY:
@@ -31,7 +41,7 @@ Address: ${co.address || '[Address, Kigali, Rwanda]'}
 Phone: ${co.phone || '[+250 XXX XXX XXX]'}
 Email: ${co.email || '[email@company.rw]'}
 Website: ${co.website || '[www.company.rw]'}
-Reference: ${co.refNumber || '[REF-' + new Date().getFullYear() + '-XXX]'}${bioSection}${docsSection}${clientsSection}
+Reference: ${co.refNumber || '[REF-' + new Date().getFullYear() + '-XXX]'}${bioSection}${docsSection}${clientsSection}${pricingSection}
 
 TENDER DETAILS:
 ${tenderDetails}
@@ -86,7 +96,7 @@ Milestones table:
 |-----------|-------------|-------------|
 
 ## 7. BUDGET & VALUE FOR MONEY
-Cost breakdown table:
+Cost breakdown table. If a PRICING CATALOGUE was provided above, use those exact prices for matching items and apply the listed margins.
 | Item | Description | Estimated Cost (RWF) |
 |------|-------------|---------------------|
 Payment schedule table:
@@ -117,7 +127,7 @@ Write formally and persuasively with Rwanda-specific context. Every table must b
 function generateMockProposal(
   tenderDetails: string,
   requirements: string,
-  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string }
+  companyInfo?: { name?: string; address?: string; phone?: string; email?: string; website?: string; refNumber?: string; pricingItems?: { name: string; unit_price: number; currency?: string; margin_pct?: number }[] }
 ): string {
   const co = companyInfo || {};
   const currentDate = new Date().toLocaleDateString('en-RW', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -362,4 +372,77 @@ ${co.address || '[Address, Kigali, Rwanda]'}
 ${co.phone || '[+250 XXX XXX XXX]'} | ${co.email || '[email@company.rw]'}
 
 Date: ${currentDate}`;
+}
+
+/** Missing item returned by extractMissingItems */
+export interface MissingItem {
+  name: string;
+  description?: string;
+  unit?: string;
+  estimated_qty?: number;
+}
+
+/**
+ * Ask the LLM to scan the tender for goods/products/services that are required
+ * but NOT already in the user's pricing catalogue.
+ *
+ * Returns an array of missing items. On any error or no-Groq-key, returns []
+ * so the caller can proceed gracefully.
+ */
+export async function extractMissingItems(
+  tenderDetails: string,
+  existingItems: { name: string; category?: string }[]
+): Promise<MissingItem[]> {
+  if (!hasGroqKey()) return [];
+
+  const existingNames = existingItems.map(i => i.name).filter(Boolean);
+
+  const prompt = `You are a procurement analyst. Analyze the following tender and identify all specific goods, products, equipment, or services that are required or mentioned as deliverables.
+
+TENDER DETAILS:
+${tenderDetails}
+
+The user already has these items in their pricing catalogue:
+${existingNames.length > 0 ? existingNames.map((n, i) => `${i + 1}. ${n}`).join('\n') : '(empty catalogue)'}
+
+TASK: List items that appear in the tender requirements but are NOT already in the user's catalogue above.
+- Focus on concrete, purchasable items: equipment, materials, products, supplies, software, services
+- Do NOT include generic compliance items like "tax clearance", "insurance", or "certificates"
+- Do NOT include items that are already in the user's catalogue (even if named slightly differently)
+- For each item, give the name, a short description, the likely unit of measurement, and an estimated quantity if mentioned
+
+Respond with ONLY a JSON array (no markdown fences, no explanation). Each element:
+{"name":"Item Name","description":"Brief spec","unit":"piece/kg/month","estimated_qty":10}
+
+If no missing items are found, respond with: []`;
+
+  try {
+    const raw = await callGroq({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+
+    // Parse the JSON response — strip any markdown fences if present
+    let cleaned = raw.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    }
+
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item: any) => item && typeof item.name === 'string' && item.name.trim())
+      .map((item: any) => ({
+        name: String(item.name).trim(),
+        description: item.description ? String(item.description).trim() : undefined,
+        unit: item.unit ? String(item.unit).trim() : undefined,
+        estimated_qty: typeof item.estimated_qty === 'number' ? item.estimated_qty : undefined,
+      }));
+  } catch (error) {
+    console.error('extractMissingItems error:', error);
+    return [];
+  }
 }

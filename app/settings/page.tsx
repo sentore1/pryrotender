@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 const CATEGORIES = ['IT & Technology', 'Construction', 'Medical', 'Consultancy', 'Goods & Supply', 'Services'];
 
@@ -34,7 +35,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'company' | 'proposal' | 'notifications' | 'email' | 'sidebar' | 'subscription' | 'employees'>('company');
+  const [tab, setTab] = useState<'company' | 'proposal' | 'notifications' | 'email' | 'sidebar' | 'subscription' | 'employees' | 'pricing' | 'suppliers'>('company');
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -77,6 +78,47 @@ export default function SettingsPage() {
   const [editingEmp, setEditingEmp]       = useState<Omit<Employee,'id'|'cv_url'> | null>(null);
   const [pendingCvUrl, setPendingCvUrl]   = useState('');
   const [pendingEmpId, setPendingEmpId]   = useState('');
+
+  // ── Pricing Items ──────────────────────────────────────────
+  type PricingItem = { id?: string; name: string; description: string; unit: string; unit_price: string; currency: string; category: 'goods' | 'service'; margin_pct: string };
+  const blankItem = (): PricingItem => ({ name: '', description: '', unit: '', unit_price: '', currency: 'RWF', category: 'goods', margin_pct: '0' });
+  const [pricingItems, setPricingItems]           = useState<PricingItem[]>([]);
+  const [pricingLoaded, setPricingLoaded]         = useState(false);
+  const [pricingTab, setPricingTab]               = useState<'goods' | 'service'>('goods');
+  const [newItem, setNewItem]                     = useState<PricingItem>(blankItem());
+  const [editingItem, setEditingItem]             = useState<PricingItem | null>(null);
+  const [savingItem, setSavingItem]               = useState(false);
+  const [xlsxParsing, setXlsxParsing]            = useState(false);
+  const [xlsxPreview, setXlsxPreview]            = useState<PricingItem[] | null>(null);
+  const [xlsxGlobalMargin, setXlsxGlobalMargin]  = useState('0');
+  const [xlsxSaving, setXlsxSaving]              = useState(false);
+  const [pricingMsg, setPricingMsg]               = useState('');
+
+  // ── Suppliers ──────────────────────────────────────────────
+  type Supplier = { id?: string; name: string; label: string; contact_email: string; whatsapp: string; notes: string };
+  const blankSupplier = (): Supplier => ({ name: '', label: '', contact_email: '', whatsapp: '', notes: '' });
+  const [suppliersData, setSuppliersData]         = useState<Supplier[]>([]);
+  const [suppliersLoaded, setSuppliersLoaded]     = useState(false);
+  const [newSupplier, setNewSupplier]             = useState<Supplier>(blankSupplier());
+  const [editingSupplier, setEditingSupplier]     = useState<Supplier | null>(null);
+  const [savingSupplier, setSavingSupplier]       = useState(false);
+  const [supplierMsg, setSupplierMsg]             = useState('');
+  // Quote request builder
+  type QuoteRequestItem = { name: string; description: string; unit: string; qty: number };
+  const [quoteItems, setQuoteItems]               = useState<QuoteRequestItem[]>([{ name: '', description: '', unit: '', qty: 1 }]);
+  const [quoteTitle, setQuoteTitle]               = useState('');
+  const [quoteSupplier, setQuoteSupplier]         = useState('');
+  const [creatingQuote, setCreatingQuote]         = useState(false);
+  const [quoteLink, setQuoteLink]                 = useState('');
+  const [showQuoteBuilder, setShowQuoteBuilder]   = useState(false);
+  // Submitted quotes inbox
+  type QuoteRequest = { id: string; token: string; title: string; items: any[]; status: string; response: any[] | null; response_notes: string | null; created_at: string; suppliers: any };
+  const [quoteRequests, setQuoteRequests]         = useState<QuoteRequest[]>([]);
+  const [quotesLoaded, setQuotesLoaded]           = useState(false);
+  const [expandedQuote, setExpandedQuote]         = useState<string | null>(null);
+  const [acceptingQuote, setAcceptingQuote]       = useState<string | null>(null);
+  const [acceptMargin, setAcceptMargin]           = useState('0');
+  const [quoteActionMsg, setQuoteActionMsg]       = useState('');
 
   useEffect(() => {
     const loadData = async (uid: string) => {
@@ -322,6 +364,253 @@ export default function SettingsPage() {
     setSidebarItems(prev => prev.map((item, i) => i === idx ? { ...item, label } : item));
   };
 
+  // ── Pricing Items helpers ────────────────────────────────────────────────
+  const loadPricingItems = async () => {
+    if (pricingLoaded) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/api/pricing-items', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const data = await res.json();
+    if (data.success) {
+      setPricingItems(data.items.map((i: any) => ({
+        ...i,
+        unit_price: String(i.unit_price),
+        margin_pct: String(i.margin_pct ?? 0),
+      })));
+    }
+    setPricingLoaded(true);
+  };
+
+  const saveItem = async (item: PricingItem) => {
+    setSavingItem(true); setPricingMsg('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setSavingItem(false); return; }
+    const res = await fetch('/api/pricing-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ ...item, unit_price: Number(item.unit_price) || 0, margin_pct: Number(item.margin_pct) || 0 }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const saved = { ...data.items[0], unit_price: String(data.items[0].unit_price), margin_pct: String(data.items[0].margin_pct ?? 0) };
+      if (item.id) {
+        setPricingItems(prev => prev.map(p => p.id === item.id ? saved : p));
+      } else {
+        setPricingItems(prev => [...prev, saved]);
+        setNewItem(blankItem());
+      }
+      setEditingItem(null);
+      setPricingMsg('✓ Saved!');
+    } else {
+      setPricingMsg(data.error || 'Save failed.');
+    }
+    setSavingItem(false);
+    setTimeout(() => setPricingMsg(''), 3000);
+  };
+
+  const deleteItem = async (id: string) => {
+    if (!confirm('Remove this item from your pricing catalogue?')) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/pricing-items?id=${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const data = await res.json();
+    if (data.success) setPricingItems(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleXlsxFile = async (file: File) => {
+    setXlsxParsing(true); setPricingMsg('');
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      if (rows.length < 2) { setPricingMsg('No data rows found in the sheet.'); setXlsxParsing(false); return; }
+
+      // Find relevant column indices — case-insensitive header scan
+      const headers: string[] = (rows[0] as any[]).map((h: any) => String(h ?? '').toLowerCase().trim());
+      const colIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+
+      const nameCol   = colIdx(['item', 'product', 'goods', 'description', 'name', 'service']);
+      const priceCol  = colIdx(['price', 'unit price', 'unit_price', 'cost', 'amount', 'rate']);
+      const unitCol   = colIdx(['unit', 'uom', 'measure']);
+      const descCol   = colIdx(['detail', 'spec', 'description', 'note', 'remark']);
+
+      if (nameCol === -1) {
+        setPricingMsg('Could not find an item/product/name column. Make sure the first row has headers.');
+        setXlsxParsing(false);
+        return;
+      }
+
+      const parsed: PricingItem[] = [];
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r] as any[];
+        const rawName = row[nameCol];
+        if (!rawName) continue;
+        const name = String(rawName).trim();
+        if (!name) continue;
+
+        const rawPrice = priceCol >= 0 ? row[priceCol] : '';
+        const price = rawPrice !== '' && rawPrice !== undefined ? String(rawPrice).replace(/[^0-9.]/g, '') : '';
+
+        parsed.push({
+          name,
+          description: descCol >= 0 && row[descCol] ? String(row[descCol]).trim() : '',
+          unit: unitCol >= 0 && row[unitCol] ? String(row[unitCol]).trim() : '',
+          unit_price: price,
+          currency: 'RWF',
+          category: pricingTab,
+          margin_pct: '0',
+        });
+      }
+
+      if (parsed.length === 0) { setPricingMsg('No valid rows found.'); setXlsxParsing(false); return; }
+      setXlsxPreview(parsed);
+      setXlsxGlobalMargin('0');
+    } catch (err) {
+      console.error('xlsx parse error:', err);
+      setPricingMsg('Failed to read the file. Make sure it is a valid .xlsx or .csv file.');
+    }
+    setXlsxParsing(false);
+  };
+
+  const confirmXlsxImport = async () => {
+    if (!xlsxPreview) return;
+    setXlsxSaving(true);
+    const margin = Number(xlsxGlobalMargin) || 0;
+    const items = xlsxPreview.map(i => ({ ...i, margin_pct: String(margin) }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setXlsxSaving(false); return; }
+    const res = await fetch('/api/pricing-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(items.map(i => ({ ...i, unit_price: Number(i.unit_price) || 0, margin_pct: margin }))),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const saved = data.items.map((i: any) => ({ ...i, unit_price: String(i.unit_price), margin_pct: String(i.margin_pct ?? 0) }));
+      setPricingItems(prev => {
+        const existing = prev.filter(p => !saved.find((s: any) => s.id === p.id));
+        return [...existing, ...saved];
+      });
+      setXlsxPreview(null);
+      setPricingMsg(`✓ ${saved.length} items imported!`);
+    } else {
+      setPricingMsg(data.error || 'Import failed.');
+    }
+    setXlsxSaving(false);
+    setTimeout(() => setPricingMsg(''), 4000);
+  };
+
+  // ── Suppliers helpers ────────────────────────────────────────────────────
+  const loadSuppliers = async () => {
+    if (suppliersLoaded) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/api/suppliers', { headers: { Authorization: `Bearer ${session.access_token}` } });
+    const data = await res.json();
+    if (data.success) setSuppliersData(data.suppliers.map((s: any) => ({ ...s, label: s.label || '', contact_email: s.contact_email || '', whatsapp: s.whatsapp || '', notes: s.notes || '' })));
+    setSuppliersLoaded(true);
+  };
+
+  const loadQuoteRequests = async () => {
+    if (quotesLoaded) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/api/supplier-quote/list', { headers: { Authorization: `Bearer ${session.access_token}` } });
+    const data = await res.json();
+    if (data.success) setQuoteRequests(data.requests);
+    setQuotesLoaded(true);
+  };
+
+  const saveSupplier = async (supplier: Supplier) => {
+    setSavingSupplier(true); setSupplierMsg('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setSavingSupplier(false); return; }
+    const res = await fetch('/api/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(supplier),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const saved = { ...data.supplier, label: data.supplier.label || '', contact_email: data.supplier.contact_email || '', whatsapp: data.supplier.whatsapp || '', notes: data.supplier.notes || '' };
+      if (supplier.id) {
+        setSuppliersData(prev => prev.map(s => s.id === supplier.id ? saved : s));
+      } else {
+        setSuppliersData(prev => [...prev, saved]);
+        setNewSupplier(blankSupplier());
+      }
+      setEditingSupplier(null);
+      setSupplierMsg('✓ Saved!');
+    } else {
+      setSupplierMsg(data.error || 'Save failed.');
+    }
+    setSavingSupplier(false);
+    setTimeout(() => setSupplierMsg(''), 3000);
+  };
+
+  const deleteSupplier = async (id: string) => {
+    if (!confirm('Remove this supplier?')) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/suppliers?id=${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` } });
+    const data = await res.json();
+    if (data.success) setSuppliersData(prev => prev.filter(s => s.id !== id));
+  };
+
+  const createQuoteLink = async () => {
+    const validItems = quoteItems.filter(i => i.name.trim());
+    if (!validItems.length) { setSupplierMsg('Add at least one item.'); return; }
+    setCreatingQuote(true); setQuoteLink(''); setSupplierMsg('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setCreatingQuote(false); return; }
+    const suppId = suppliersData.find(s => s.name === quoteSupplier)?.id;
+    const res = await fetch('/api/supplier-quote/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ supplierId: suppId || null, title: quoteTitle || 'Price Quote Request', items: validItems }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setQuoteLink(data.url);
+      setQuotesLoaded(false); // refresh inbox
+    } else {
+      setSupplierMsg(data.error || 'Failed to create link.');
+    }
+    setCreatingQuote(false);
+  };
+
+  const acceptQuote = async (id: string) => {
+    setAcceptingQuote(id); setQuoteActionMsg('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setAcceptingQuote(null); return; }
+    const res = await fetch('/api/supplier-quote/list', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ id, action: 'accept', margin_pct: Number(acceptMargin) || 0 }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setQuoteRequests(prev => prev.map(q => q.id === id ? { ...q, status: 'accepted' } : q));
+      setQuoteActionMsg('✓ Accepted — items saved to your pricing catalogue!');
+      setPricingLoaded(false); // force reload next time pricing tab opens
+    } else {
+      setQuoteActionMsg(data.error || 'Failed to accept quote.');
+    }
+    setAcceptingQuote(null);
+    setTimeout(() => setQuoteActionMsg(''), 5000);
+  };
+
+  // Lazy-load pricing items when the tab opens
+  useEffect(() => { if (tab === 'pricing') loadPricingItems(); }, [tab]);
+  // Lazy-load suppliers + quote inbox when the tab opens
+  useEffect(() => { if (tab === 'suppliers') { loadSuppliers(); loadQuoteRequests(); } }, [tab]);
+
   if (loading) return <div className="min-h-screen bg-white flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" /></div>;
 
   return (
@@ -335,7 +624,7 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          {(['company', 'proposal', 'notifications', 'email', 'sidebar', 'subscription', 'employees'] as const).map(t => (
+          {(['company', 'proposal', 'notifications', 'email', 'sidebar', 'subscription', 'employees', 'pricing', 'suppliers'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
               {t}
@@ -922,6 +1211,435 @@ export default function SettingsPage() {
             {employees.length === 0 && !cvUploading && (
               <p className="text-xs text-gray-400 text-center py-4">No employee CVs added yet. Upload a PDF above to get started.</p>
             )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════ */}
+        {/* PRICING TAB — items/goods/services with unit prices          */}
+        {/* ════════════════════════════════════════════════════════ */}
+        {tab === 'pricing' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div>
+                <h2 className="font-semibold text-gray-800">Pricing Catalogue</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Add your products, goods, and services with unit prices. When generating a proposal, the system checks here first for pricing.</p>
+              </div>
+
+              {/* Goods / Service sub-tabs */}
+              <div className="flex gap-2">
+                {(['goods', 'service'] as const).map(ct => (
+                  <button key={ct} onClick={() => setPricingTab(ct)}
+                    className={`px-4 py-1.5 text-sm rounded-lg font-medium capitalize transition ${pricingTab === ct ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    {ct === 'goods' ? '📦 Products / Goods' : '🛠️ Services'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Excel drop zone */}
+              <div>
+                <label className="text-xs font-semibold text-gray-600 block mb-2">Bulk Import from Excel</label>
+                <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition ${xlsxParsing ? 'border-gray-300 bg-gray-50' : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'}`}>
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={xlsxParsing}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleXlsxFile(f); e.target.value = ''; }} />
+                  {xlsxParsing ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
+                      <p className="text-sm text-blue-600 font-medium">Reading file…</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-gray-700">📊 Drop Excel / CSV here or click to upload</p>
+                      <p className="text-xs text-gray-400 mt-1">The system detects item/product, price, unit, and description columns automatically</p>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* Manual add form */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Add Item Manually</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" value={newItem.name} onChange={e => setNewItem(n => ({ ...n, name: e.target.value }))} placeholder="Item / product name *"
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 col-span-2" />
+                  <input type="text" value={newItem.description} onChange={e => setNewItem(n => ({ ...n, description: e.target.value }))} placeholder="Description / specs"
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 col-span-2" />
+                  <input type="text" value={newItem.unit} onChange={e => setNewItem(n => ({ ...n, unit: e.target.value }))} placeholder="Unit (e.g. piece, kg, month)"
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" value={newItem.unit_price} onChange={e => setNewItem(n => ({ ...n, unit_price: e.target.value }))} placeholder="Unit Price (RWF)" min="0" step="0.01"
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" value={newItem.margin_pct} onChange={e => setNewItem(n => ({ ...n, margin_pct: e.target.value }))} placeholder="Margin %" min="0" step="0.1"
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select value={newItem.currency} onChange={e => setNewItem(n => ({ ...n, currency: e.target.value }))}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="RWF">RWF</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => newItem.name.trim() && saveItem({ ...newItem, category: pricingTab })}
+                    disabled={!newItem.name.trim() || savingItem}
+                    className="flex-1 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+                    {savingItem ? 'Saving...' : '+ Add Item'}
+                  </button>
+                </div>
+              </div>
+
+              {pricingMsg && <p className={`text-xs text-center font-medium ${pricingMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{pricingMsg}</p>}
+            </div>
+
+            {/* Existing items list */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+              <h3 className="font-semibold text-gray-800 text-sm">{pricingTab === 'goods' ? '📦 Products / Goods' : '🛠️ Services'} ({pricingItems.filter(i => i.category === pricingTab).length})</h3>
+              {pricingItems.filter(i => i.category === pricingTab).length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No {pricingTab} added yet. Add manually or import from Excel above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pricingItems.filter(i => i.category === pricingTab).map((item) => {
+                    const idx = pricingItems.indexOf(item);
+                    const isEditing = editingItem?.id === item.id;
+                    const finalPrice = (Number(item.unit_price) || 0) * (1 + (Number(item.margin_pct) || 0) / 100);
+                    return (
+                      <div key={item.id || idx} className="border border-gray-200 rounded-lg p-3">
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input type="text" value={editingItem!.name} onChange={e => setEditingItem(prev => prev ? { ...prev, name: e.target.value } : prev)} placeholder="Name"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 col-span-2" />
+                              <input type="text" value={editingItem!.description} onChange={e => setEditingItem(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Description"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 col-span-2" />
+                              <input type="text" value={editingItem!.unit} onChange={e => setEditingItem(prev => prev ? { ...prev, unit: e.target.value } : prev)} placeholder="Unit"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <input type="number" value={editingItem!.unit_price} onChange={e => setEditingItem(prev => prev ? { ...prev, unit_price: e.target.value } : prev)} placeholder="Price"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <input type="number" value={editingItem!.margin_pct} onChange={e => setEditingItem(prev => prev ? { ...prev, margin_pct: e.target.value } : prev)} placeholder="Margin %"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <select value={editingItem!.currency} onChange={e => setEditingItem(prev => prev ? { ...prev, currency: e.target.value } : prev)}
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="RWF">RWF</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                              </select>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => saveItem(editingItem!)} disabled={savingItem}
+                                className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">Save</button>
+                              <button onClick={() => setEditingItem(null)}
+                                className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800">{item.name}</p>
+                              {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+                              <div className="flex flex-wrap gap-3 mt-1">
+                                <span className="text-xs text-gray-600">Price: <span className="font-semibold">{Number(item.unit_price).toLocaleString()} {item.currency}</span>{item.unit ? ` /${item.unit}` : ''}</span>
+                                {Number(item.margin_pct) > 0 && (
+                                  <span className="text-xs text-blue-600">Margin: {item.margin_pct}% → {finalPrice.toLocaleString()} {item.currency}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <button onClick={() => setEditingItem({ ...item })} className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Edit</button>
+                              {item.id && <button onClick={() => deleteItem(item.id!)} className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 border border-red-100">Remove</button>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Excel confirm modal */}
+            {xlsxPreview && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+                <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
+                  <div className="px-6 py-4 border-b border-gray-100">
+                    <h3 className="font-bold text-gray-800">Confirm Import — {xlsxPreview.length} items found</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Review the detected items, add a margin, then click Import to save.</p>
+                  </div>
+                  <div className="flex items-center gap-2 px-6 py-3 bg-blue-50 border-b border-blue-100">
+                    <label className="text-xs font-semibold text-gray-600">Apply margin % to all:</label>
+                    <input type="number" value={xlsxGlobalMargin} onChange={e => setXlsxGlobalMargin(e.target.value)} min="0" step="0.1"
+                      className="w-20 px-2 py-1 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-6 py-4">
+                    <table className="w-full text-xs">
+                      <thead className="text-gray-500 uppercase tracking-wide">
+                        <tr><th className="text-left py-1">Item</th><th className="text-right py-1">Price</th><th className="text-left py-1 px-2">Unit</th><th className="text-left py-1 px-2">Description</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {xlsxPreview.map((item, i) => (
+                          <tr key={i}>
+                            <td className="py-1.5 font-medium text-gray-800">{item.name}</td>
+                            <td className="py-1.5 text-right text-gray-600">{item.unit_price || '—'}</td>
+                            <td className="py-1.5 px-2 text-gray-500">{item.unit || '—'}</td>
+                            <td className="py-1.5 px-2 text-gray-400 truncate max-w-[120px]">{item.description || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+                    <button onClick={confirmXlsxImport} disabled={xlsxSaving}
+                      className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                      {xlsxSaving ? 'Importing...' : `✓ Import ${xlsxPreview.length} Items`}
+                    </button>
+                    <button onClick={() => setXlsxPreview(null)} disabled={xlsxSaving}
+                      className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════ */}
+        {/* SUPPLIERS TAB — supplier directory + quote links + inbox   */}
+        {/* ════════════════════════════════════════════════════════ */}
+        {tab === 'suppliers' && (
+          <div className="space-y-6">
+            {/* Add supplier */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div>
+                <h2 className="font-semibold text-gray-800">Suppliers</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Add suppliers with their email and WhatsApp. When an item is missing from your catalogue, send them a quote request link.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" value={newSupplier.name} onChange={e => setNewSupplier(s => ({ ...s, name: e.target.value }))} placeholder="Supplier name *"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 col-span-2" />
+                <input type="text" value={newSupplier.label} onChange={e => setNewSupplier(s => ({ ...s, label: e.target.value }))} placeholder="Label / category (e.g. IT, Construction)"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="email" value={newSupplier.contact_email} onChange={e => setNewSupplier(s => ({ ...s, contact_email: e.target.value }))} placeholder="Email"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" value={newSupplier.whatsapp} onChange={e => setNewSupplier(s => ({ ...s, whatsapp: e.target.value }))} placeholder="WhatsApp number (e.g. +2507XXXXXXXX)"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" value={newSupplier.notes} onChange={e => setNewSupplier(s => ({ ...s, notes: e.target.value }))} placeholder="Notes"
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 col-span-2" />
+              </div>
+              <button onClick={() => newSupplier.name.trim() && saveSupplier({ ...newSupplier })}
+                disabled={!newSupplier.name.trim() || savingSupplier}
+                className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+                {savingSupplier ? 'Saving...' : '+ Add Supplier'}
+              </button>
+              {supplierMsg && <p className={`text-xs text-center font-medium ${supplierMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{supplierMsg}</p>}
+            </div>
+
+            {/* Supplier list */}
+            {suppliersData.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+                <h3 className="font-semibold text-gray-800 text-sm">Your Suppliers ({suppliersData.length})</h3>
+                <div className="space-y-2">
+                  {suppliersData.map((s, idx) => {
+                    const isEditing = editingSupplier?.id === s.id;
+                    return (
+                      <div key={s.id || idx} className="border border-gray-200 rounded-lg p-3 space-y-2">
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input type="text" value={editingSupplier!.name} onChange={e => setEditingSupplier(prev => prev ? { ...prev, name: e.target.value } : prev)} placeholder="Name"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 col-span-2" />
+                              <input type="text" value={editingSupplier!.label} onChange={e => setEditingSupplier(prev => prev ? { ...prev, label: e.target.value } : prev)} placeholder="Label"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <input type="email" value={editingSupplier!.contact_email} onChange={e => setEditingSupplier(prev => prev ? { ...prev, contact_email: e.target.value } : prev)} placeholder="Email"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <input type="text" value={editingSupplier!.whatsapp} onChange={e => setEditingSupplier(prev => prev ? { ...prev, whatsapp: e.target.value } : prev)} placeholder="WhatsApp"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              <input type="text" value={editingSupplier!.notes} onChange={e => setEditingSupplier(prev => prev ? { ...prev, notes: e.target.value } : prev)} placeholder="Notes"
+                                className="px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 col-span-2" />
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => saveSupplier(editingSupplier!)} disabled={savingSupplier}
+                                className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">Save</button>
+                              <button onClick={() => setEditingSupplier(null)} className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800">{s.name}</p>
+                                {s.label && <span className="inline-block mt-0.5 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{s.label}</span>}
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {s.contact_email && <span className="text-xs text-gray-500">✉ {s.contact_email}</span>}
+                                  {s.whatsapp && <span className="text-xs text-gray-500">💬 {s.whatsapp}</span>}
+                                </div>
+                                {s.notes && <p className="text-xs text-gray-400 mt-1">{s.notes}</p>}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 shrink-0">
+                                {/* Send email */}
+                                {s.contact_email && (
+                                  <button onClick={async () => {
+                                    setShowQuoteBuilder(true); setQuoteSupplier(s.name);
+                                    setQuoteTitle(`Price Request from ${company.company_name || 'PryroTender'}`);
+                                  }} className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 border border-blue-200">Quote</button>
+                                )}
+                                {/* WhatsApp */}
+                                {s.whatsapp && (
+                                  <a href={`https://wa.me/${s.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs text-green-600 hover:text-green-700 px-2 py-1 rounded hover:bg-green-50 border border-green-200">WhatsApp</a>
+                                )}
+                                <button onClick={() => setEditingSupplier({ ...s })} className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Edit</button>
+                                {s.id && <button onClick={() => deleteSupplier(s.id!)} className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 border border-red-100">Remove</button>}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quote link builder */}
+            {showQuoteBuilder && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-800 text-sm">🔗 Create Quote Request Link</h3>
+                  <button onClick={() => { setShowQuoteBuilder(false); setQuoteLink(''); setQuoteItems([{ name: '', description: '', unit: '', qty: 1 }]); }}
+                    className="text-xs text-gray-400 hover:text-gray-700">✕ Close</button>
+                </div>
+                <p className="text-xs text-gray-400">Add the items you need priced. A link will be generated that you can email or WhatsApp to the supplier. They fill in prices on a branded form with your logo.</p>
+
+                <input type="text" value={quoteTitle} onChange={e => setQuoteTitle(e.target.value)} placeholder="Quote title (e.g. Price Request for Office Supplies)"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                <select value={quoteSupplier} onChange={e => setQuoteSupplier(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select supplier (optional)</option>
+                  {suppliersData.map((s, i) => <option key={s.id || i} value={s.name}>{s.name}</option>)}
+                </select>
+
+                {/* Quote items */}
+                <div className="space-y-2">
+                  {quoteItems.map((qi, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-1.5">
+                      <input type="text" value={qi.name} onChange={e => setQuoteItems(prev => prev.map((p, j) => j === i ? { ...p, name: e.target.value } : p))} placeholder="Item name"
+                        className="col-span-5 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <input type="text" value={qi.unit} onChange={e => setQuoteItems(prev => prev.map((p, j) => j === i ? { ...p, unit: e.target.value } : p))} placeholder="Unit"
+                        className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <input type="number" value={qi.qty} onChange={e => setQuoteItems(prev => prev.map((p, j) => j === i ? { ...p, qty: Number(e.target.value) } : p))} placeholder="Qty" min="1"
+                        className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <input type="text" value={qi.description} onChange={e => setQuoteItems(prev => prev.map((p, j) => j === i ? { ...p, description: e.target.value } : p))} placeholder="Description"
+                        className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <button onClick={() => setQuoteItems(prev => prev.filter((_, j) => j !== i))} disabled={quoteItems.length === 1}
+                        className="col-span-1 text-xs text-red-400 hover:text-red-600 disabled:opacity-30">✕</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setQuoteItems(prev => [...prev, { name: '', description: '', unit: '', qty: 1 }])}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Add row</button>
+                </div>
+
+                <button onClick={createQuoteLink} disabled={creatingQuote || !quoteItems.some(i => i.name.trim())}
+                  className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+                  {creatingQuote ? 'Generating...' : '🔗 Generate Quote Link'}
+                </button>
+
+                {quoteLink && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-semibold text-green-700">✓ Link created!</p>
+                    <div className="flex gap-2">
+                      <input type="text" readOnly value={quoteLink}
+                        className="flex-1 px-3 py-2 bg-white border border-green-200 rounded text-xs text-gray-600" />
+                      <button onClick={() => navigator.clipboard.writeText(quoteLink)}
+                        className="px-3 py-2 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700">Copy</button>
+                    </div>
+                    {/* Email the link */}
+                    {(() => {
+                      const supp = suppliersData.find(s => s.name === quoteSupplier);
+                      return supp?.contact_email ? (
+                        <a href={`mailto:${supp.contact_email}?subject=${encodeURIComponent(quoteTitle)}&body=${encodeURIComponent(`Hello ${supp.name},\n\nWe would like to request pricing for the following items. Please click the link below to fill in your prices:\n\n${quoteLink}\n\nThank you,\n${company.company_name || ''}`)}`}
+                          className="inline-block mt-1 text-xs text-blue-600 hover:text-blue-700 font-medium">✉ Open in email →</a>
+                      ) : null;
+                    })()}
+                    {/* WhatsApp the link */}
+                    {(() => {
+                      const supp = suppliersData.find(s => s.name === quoteSupplier);
+                      return supp?.whatsapp ? (
+                        <a href={`https://wa.me/${supp.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${supp.name}, we would like to request pricing. Please fill in your prices here: ${quoteLink}`)}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="inline-block mt-1 ml-2 text-xs text-green-600 hover:text-green-700 font-medium">💬 Send on WhatsApp →</a>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Submitted quotes inbox */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+              <h3 className="font-semibold text-gray-800 text-sm">📥 Quote Responses ({quoteRequests.filter(q => q.status === 'submitted').length} new)</h3>
+              {quoteRequests.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No quote requests sent yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {quoteRequests.map((qr) => (
+                    <div key={qr.id} className={`border rounded-lg p-3 ${qr.status === 'submitted' ? 'border-green-300 bg-green-50/50' : qr.status === 'accepted' ? 'border-blue-200' : 'border-gray-200'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{qr.title}</p>
+                          <p className="text-xs text-gray-400">
+                            {qr.suppliers?.name ? `→ ${qr.suppliers.name} · ` : ''}{qr.items?.length || 0} items · {new Date(qr.created_at).toLocaleDateString()}
+                          </p>
+                          <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                            qr.status === 'submitted' ? 'bg-green-100 text-green-700' :
+                            qr.status === 'accepted' ? 'bg-blue-100 text-blue-700' :
+                            qr.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>{qr.status}</span>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          {qr.status === 'submitted' && (
+                            <button onClick={() => setExpandedQuote(expandedQuote === qr.id ? null : qr.id)}
+                              className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 border border-blue-200">View</button>
+                          )}
+                          <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/supplier-quote/${qr.token}`)}
+                            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">Copy Link</button>
+                        </div>
+                      </div>
+
+                      {/* Expanded submitted quote */}
+                      {expandedQuote === qr.id && qr.response && (
+                        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                          <table className="w-full text-xs">
+                            <thead className="text-gray-500 uppercase tracking-wide">
+                              <tr><th className="text-left py-1">Item</th><th className="text-right py-1 px-2">Unit Price</th><th className="text-center py-1 px-2">Qty</th><th className="text-right py-1 px-2">Total</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {(qr.response as any[]).map((item, i) => (
+                                <tr key={i}>
+                                  <td className="py-1.5 font-medium text-gray-800">{item.name}</td>
+                                  <td className="py-1.5 text-right px-2 text-gray-600">{Number(item.unit_price).toLocaleString()} RWF</td>
+                                  <td className="py-1.5 text-center px-2 text-gray-500">{item.qty}</td>
+                                  <td className="py-1.5 text-right px-2 font-semibold text-gray-700">{Number(item.total).toLocaleString()} RWF</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {qr.response_notes && <p className="text-xs text-gray-500 mt-1">Notes: {qr.response_notes}</p>}
+
+                          {/* Accept with margin */}
+                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                            <label className="text-xs font-semibold text-gray-600">Margin %:</label>
+                            <input type="number" value={acceptMargin} onChange={e => setAcceptMargin(e.target.value)} min="0" step="0.1"
+                              className="w-20 px-2 py-1 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <button onClick={() => acceptQuote(qr.id)} disabled={acceptingQuote === qr.id}
+                              className="flex-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50">
+                              {acceptingQuote === qr.id ? 'Accepting...' : '✓ Accept & Save to Catalogue'}
+                            </button>
+                          </div>
+                          {quoteActionMsg && <p className="text-xs text-green-600 font-medium mt-1">{quoteActionMsg}</p>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

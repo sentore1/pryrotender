@@ -240,6 +240,91 @@ async function scrapeNewTimesJobs(): Promise<Tender[]> {
   return tenders;
 }
 
+/** Parses a single Umucyo listing page HTML into Tender[] objects.
+ *  The listing page uses a <table> with <tbody> rows; each row has a radio
+ *  input whose value encodes: "tenderId|title|orgCode|deadline|stage|method|type|openDate|status" */
+function parseUmucyoPageHtml(html: string): Tender[] {
+  const UMUCYO_URL = 'https://umucyo.gov.rw';
+  const $ = cheerio.load(html);
+  const tenders: Tender[] = [];
+
+  const categoryMap: Record<string, string> = {
+    G: 'Goods',
+    C: 'Consultant Services',
+    NC: 'Non Consultant Services',
+    W: 'Works',
+  };
+
+  $('table tbody tr').each((_, element) => {
+    try {
+      const $el = $(element);
+
+      const radioVal = $el.find('input[type="radio"][name="tenderNo"]').val() as string | undefined;
+      const parts = radioVal ? radioVal.split('|') : [];
+      const tenderId = parts[0] || '';
+      const titleFromRadio = parts[1] || '';
+      const deadline = parts[3] || 'Not specified';
+      const tenderType = parts[6] || '';
+
+      const linkTitle = $el.find('a[href*="ViewDetail"]').text().trim();
+      const title = (titleFromRadio || linkTitle || '').trim();
+
+      if (!title || title.length < 5) return;
+
+      const category = categoryMap[tenderType] || 'Tender';
+
+      const refText = $el.find('td').eq(2).text().trim();
+      const orgFromRef = refText.split('/').pop()?.trim() || 'Government of Rwanda';
+
+      tenders.push({
+        id: stableId('umucyo', tenderId || title),
+        title,
+        category,
+        deadline,
+        description: `${orgFromRef} - ${category} - Government of Rwanda`,
+        requirements: 'Official government tender - visit Umucyo for full details',
+        source: 'Umucyo (Gov)',
+        url: tenderId
+          ? `${UMUCYO_URL}/eb/bav/selectAdvertisingDtlInfo.do?tendReferNo=${encodeURIComponent(tenderId)}`
+          : `${UMUCYO_URL}/eb/bav/selectListAdvertisingListForGU.do`,
+        type: 'tender',
+        location: 'Rwanda',
+        organization: orgFromRef,
+      });
+    } catch (err) {
+      console.error('Error parsing Umucyo row:', err);
+    }
+  });
+
+  return tenders;
+}
+
+/** Searches Umucyo by tender name using the site's built-in search API.
+ *  The endpoint `selectListAdvertisingListForGU.do?tendNm=<keyword>` returns
+ *  matching tenders across ALL pages of the full listing (not just the first
+ *  few pages), so we can find tenders that are too old to appear in the
+ *  default page-1-through-4 scrape. */
+async function searchUmucyoTenders(searchTerm: string): Promise<Tender[]> {
+  const UMUCYO_SEARCH_URL = 'https://umucyo.gov.rw/eb/bav/selectListAdvertisingListForGU.do';
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  };
+
+  try {
+    const res = await axios.get(UMUCYO_SEARCH_URL, {
+      params: { tendNm: searchTerm },
+      timeout: 15000,
+      headers,
+    });
+    const tenders = parseUmucyoPageHtml(res.data);
+    console.log(`Umucyo search for "${searchTerm}": found ${tenders.length} tenders`);
+    return tenders;
+  } catch (err) {
+    console.error(`Umucyo search failed for "${searchTerm}":`, err);
+    return [];
+  }
+}
+
 export async function scrapeTenders(category: string): Promise<Tender[]> {
   const JOB_IN_RWANDA_URL = 'https://www.jobinrwanda.com';
   const UMUCYO_URL = 'https://umucyo.gov.rw';
@@ -247,15 +332,21 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
   try {
     console.log('Fetching tenders from Job in Rwanda, Umucyo, New Times Jobs and ImvahoNshya...');
     
-    // Use allSettled so one failure doesn't kill the other
-    const [jobInRwandaResult, umucyoResult, newTimesResult, imvahoNshyaResult] = await Promise.allSettled([
-      axios.get(`${JOB_IN_RWANDA_URL}/jobs/tender`, { 
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      }),
-      axios.get(`${UMUCYO_URL}/pt/pcm/moveMainPageDetail.do`, {
+    // Fetch all sources concurrently. Umucyo uses 4 pages via the full listing
+    // endpoint which supports ?currentPageNo=N as a GET parameter.
+    const UMUCYO_PAGES = 4;
+    const umucyoPageUrls = Array.from({ length: UMUCYO_PAGES }, (_, i) =>
+      `${UMUCYO_URL}/eb/bav/selectListAdvertisingListForGU.do?currentPageNo=${i + 1}`
+    );
+
+    // Use allSettled so one failure doesn't kill the others
+    const [
+      jobInRwandaResult,
+      newTimesResult,
+      imvahoNshyaResult,
+      ...umucyoPageResults
+    ] = await Promise.allSettled([
+      axios.get(`${JOB_IN_RWANDA_URL}/jobs/tender`, {
         timeout: 10000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -263,6 +354,12 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
       }),
       scrapeNewTimesJobs(),
       scrapeImvahoNshya(),
+      ...umucyoPageUrls.map(url => axios.get(url, {
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      })),
     ]);
     
     const tenders: Tender[] = [];
@@ -326,46 +423,22 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
     });
     } // end jobInRwanda else
     
-    // Parse Umucyo tenders
-    if (umucyoResult.status === 'rejected') {
-      console.error('Umucyo fetch failed:', umucyoResult.reason?.message);
-    } else {
-    console.log('Parsing Umucyo tenders...');
-    const $umucyo = cheerio.load(umucyoResult.value.data);
-    
-    $umucyo('#content1 ul.notice li').each((index, element) => {
-      try {
-        const $el = $umucyo(element);
-        // Second span holds the full title in its title attribute
-        const title = $el.find('span[title]').not('.class').attr('title') || $el.find('span[title]').last().attr('title') || '';
-        const tenderCategory = $el.find('span.class').attr('title') || $el.find('span.class').text().trim();
-        const dateText = $el.find('span.Date').text().trim();
-        const onclickAttr = $el.find('a').attr('onclick') || '';
-        
-        // Their site has a typo: "javacsript:" — match both
-        const tenderIdMatch = onclickAttr.match(/fn_viewTendNtceDetail\('([^']+)'/);
-        const tenderId = tenderIdMatch ? tenderIdMatch[1] : '';
-        
-        if (title && title.length > 10 && !title.includes('Load data')) {
-          tenders.push({
-            id: stableId('umucyo', title),
-            title: title,
-            category: tenderCategory || 'Tender',
-            deadline: dateText || 'Not specified',
-            description: `Government of Rwanda - ${tenderCategory || 'Procurement'}`,
-            requirements: 'Official government tender - visit Umucyo for full details',
-            source: 'Umucyo (Gov)',
-            url: tenderId ? `${UMUCYO_URL}/eb/bav/selectListAdvertisingListForGU.do?tendReferNo=${tenderId}` : UMUCYO_URL,
-            type: 'tender',
-            location: 'Rwanda',
-            organization: 'Government of Rwanda'
-          });
-        }
-      } catch (err) {
-        console.error('Error parsing Umucyo tender:', err);
+    // Parse Umucyo tenders from all fetched pages using the shared helper
+    let umucyoPagesParsed = 0;
+    for (let pi = 0; pi < umucyoPageResults.length; pi++) {
+      const pageResult = umucyoPageResults[pi];
+      if (pageResult.status === 'rejected') {
+        console.error(`Umucyo page ${pi + 1} fetch failed:`, (pageResult as PromiseRejectedResult).reason?.message);
+        continue;
       }
-    });
-    } // end umucyo else
+
+      console.log(`Parsing Umucyo page ${pi + 1}...`);
+      const pageTenders = parseUmucyoPageHtml(pageResult.value.data);
+      tenders.push(...pageTenders);
+      console.log(`Umucyo page ${pi + 1}: parsed ${pageTenders.length} tenders`);
+      umucyoPagesParsed += pageTenders.length;
+    }
+    console.log(`Umucyo total: ${umucyoPagesParsed} tenders across ${umucyoPageResults.length} pages`);
 
     // Merge New Times Jobs listings
     if (newTimesResult.status === 'rejected') {
@@ -405,6 +478,129 @@ export async function scrapeTenders(category: string): Promise<Tender[]> {
     if (axios.isAxiosError(error)) {
       console.error('Axios error:', error.message, error.response?.status);
     }
+    return [];
+  }
+}
+
+/** Searches for tenders matching a query across all sources.
+ *
+ *  Unlike `scrapeTenders` which only grabs the latest 4 pages from Umucyo's
+ *  default listing, this function uses Umucyo's built-in search API
+ *  (`?tendNm=<keyword>`) which searches across ALL 39,000+ tenders — not just
+ *  the first 40. This ensures that older tenders (like one published a week
+ *  ago that has since been pushed off page 4) are still findable.
+ *
+ *  For Job in Rwanda, New Times, and ImvahoNshya, we scrape the default
+ *  listing and filter client-side since those sources don't expose a search
+ *  API that's easy to call.
+ */
+export async function searchTenders(query: string): Promise<Tender[]> {
+  const JOB_IN_RWANDA_URL = 'https://www.jobinrwanda.com';
+  const searchTerm = query.trim().toLowerCase();
+
+  if (!searchTerm) return scrapeTenders('');
+
+  try {
+    console.log(`Searching tenders for "${query}"...`);
+
+    // Run Umucyo search + other source scrapes concurrently
+    const [umucyoSearchResult, jobInRwandaResult, newTimesResult, imvahoNshyaResult] =
+      await Promise.allSettled([
+        searchUmucyoTenders(searchTerm),
+        axios.get(`${JOB_IN_RWANDA_URL}/jobs/tender`, {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        }),
+        scrapeNewTimesJobs(),
+        scrapeImvahoNshya(),
+      ]);
+
+    const tenders: Tender[] = [];
+
+    // 1. Umucyo search results (already filtered by the API)
+    if (umucyoSearchResult.status === 'fulfilled') {
+      tenders.push(...umucyoSearchResult.value);
+    } else {
+      console.error('Umucyo search failed:', umucyoSearchResult.reason?.message);
+    }
+
+    // 2. Job in Rwanda — scrape and filter
+    if (jobInRwandaResult.status === 'fulfilled') {
+      const $ = cheerio.load(jobInRwandaResult.value.data);
+      $('.views-row').each((_, element) => {
+        try {
+          const $el = $(element);
+          const title = $el.find('h5.card-title, .card-title').text().trim();
+          const url = $el.find('a').first().attr('href') || '';
+          const cardBody = $el.find('.card-body').text();
+
+          let organization = '';
+          let location = '';
+          let deadline = '';
+
+          const lines = cardBody.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.includes('|') && !line.includes('Published')) {
+              const parts = line.split('|').map(p => p.trim());
+              if (parts.length >= 2) {
+                organization = parts[0];
+                location = parts[1];
+              }
+            }
+            if (line.toLowerCase().includes('deadline')) {
+              if (i + 1 < lines.length && lines[i + 1].match(/\d{2}-\d{2}-\d{4}/)) {
+                deadline = lines[i + 1];
+              }
+            }
+          }
+
+          const haystack = `${title} ${organization} ${location}`.toLowerCase();
+          if (title && title.length > 10 && haystack.includes(searchTerm)) {
+            tenders.push({
+              id: stableId('jobinrwanda', title),
+              title,
+              category: 'Tender',
+              deadline: deadline || 'Not specified',
+              description: organization && location ? `${organization} - ${location}` : (organization || location || 'Rwanda'),
+              requirements: 'Click to view full tender details and requirements',
+              source: 'Job in Rwanda',
+              url: url.startsWith('http') ? url : `${JOB_IN_RWANDA_URL}${url}`,
+              type: 'tender',
+              location: location || 'Rwanda',
+              organization: organization || 'Not specified',
+            });
+          }
+        } catch (err) {
+          console.error('Error parsing Job in Rwanda tender:', err);
+        }
+      });
+    }
+
+    // 3. New Times Jobs — filter by search term
+    if (newTimesResult.status === 'fulfilled') {
+      const filtered = newTimesResult.value.filter(t => {
+        const haystack = `${t.title} ${t.organization ?? ''} ${t.category}`.toLowerCase();
+        return haystack.includes(searchTerm);
+      });
+      tenders.push(...filtered);
+    }
+
+    // 4. ImvahoNshya — filter by search term
+    if (imvahoNshyaResult.status === 'fulfilled') {
+      const filtered = imvahoNshyaResult.value.filter(t => {
+        const haystack = `${t.title} ${t.organization ?? ''} ${t.category}`.toLowerCase();
+        return haystack.includes(searchTerm);
+      });
+      tenders.push(...filtered);
+    }
+
+    console.log(`Search for "${query}": found ${tenders.length} tenders`);
+    return tenders;
+  } catch (error) {
+    console.error('Error searching tenders:', error);
     return [];
   }
 }
