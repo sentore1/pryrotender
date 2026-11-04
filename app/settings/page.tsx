@@ -80,7 +80,7 @@ export default function SettingsPage() {
   const [pendingEmpId, setPendingEmpId]   = useState('');
 
   // ── Pricing Items ──────────────────────────────────────────
-  type PricingItem = { id?: string; name: string; description: string; unit: string; unit_price: string; currency: string; category: 'goods' | 'service'; margin_pct: string };
+  type PricingItem = { id?: string; name: string; description: string; unit: string; unit_price: string; currency: string; category: 'goods' | 'service'; margin_pct: string; _exists?: boolean };
   const blankItem = (): PricingItem => ({ name: '', description: '', unit: '', unit_price: '', currency: 'RWF', category: 'goods', margin_pct: '0' });
   const [pricingItems, setPricingItems]           = useState<PricingItem[]>([]);
   const [pricingLoaded, setPricingLoaded]         = useState(false);
@@ -469,7 +469,15 @@ export default function SettingsPage() {
       }
 
       if (parsed.length === 0) { setPricingMsg('No valid rows found.'); setXlsxParsing(false); return; }
-      setXlsxPreview(parsed);
+
+      // Mark items that already exist in the catalogue (case-insensitive name match)
+      const existingNames = new Set(pricingItems.map(i => i.name.toLowerCase().trim()));
+      const markedParsed = parsed.map(item => ({
+        ...item,
+        _exists: existingNames.has(item.name.toLowerCase().trim()),
+      }));
+
+      setXlsxPreview(markedParsed);
       setXlsxGlobalMargin('0');
     } catch (err) {
       console.error('xlsx parse error:', err);
@@ -1230,7 +1238,7 @@ export default function SettingsPage() {
                 {(['goods', 'service'] as const).map(ct => (
                   <button key={ct} onClick={() => setPricingTab(ct)}
                     className={`px-4 py-1.5 text-sm rounded-lg font-medium capitalize transition ${pricingTab === ct ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    {ct === 'goods' ? '📦 Products / Goods' : '🛠️ Services'}
+                    {ct === 'goods' ? 'Products / Goods' : 'Services'}
                   </button>
                 ))}
               </div>
@@ -1248,7 +1256,7 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm font-semibold text-gray-700">📊 Drop Excel / CSV here or click to upload</p>
+                      <p className="text-sm font-semibold text-gray-700">Drop Excel / CSV here or click to upload</p>
                       <p className="text-xs text-gray-400 mt-1">The system detects item/product, price, unit, and description columns automatically</p>
                     </>
                   )}
@@ -1290,7 +1298,7 @@ export default function SettingsPage() {
 
             {/* Existing items list */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
-              <h3 className="font-semibold text-gray-800 text-sm">{pricingTab === 'goods' ? '📦 Products / Goods' : '🛠️ Services'} ({pricingItems.filter(i => i.category === pricingTab).length})</h3>
+              <h3 className="font-semibold text-gray-800 text-sm">{pricingTab === 'goods' ? 'Products / Goods' : 'Services'} ({pricingItems.filter(i => i.category === pricingTab).length})</h3>
               {pricingItems.filter(i => i.category === pricingTab).length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-4">No {pricingTab} added yet. Add manually or import from Excel above.</p>
               ) : (
@@ -1358,35 +1366,58 @@ export default function SettingsPage() {
               <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
                 <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
                   <div className="px-6 py-4 border-b border-gray-100">
-                    <h3 className="font-bold text-gray-800">Confirm Import — {xlsxPreview.length} items found</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Review the detected items, add a margin, then click Import to save.</p>
+                    <h3 className="font-bold text-gray-800">Confirm Import — {xlsxPreview.length} items</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Remove unwanted rows, set a margin, then import.</p>
                   </div>
-                  <div className="flex items-center gap-2 px-6 py-3 bg-blue-50 border-b border-blue-100">
-                    <label className="text-xs font-semibold text-gray-600">Apply margin % to all:</label>
+                  <div className="flex items-center gap-3 px-6 py-3 bg-white border-b border-gray-100">
+                    <label className="text-xs font-semibold text-gray-600 shrink-0">Margin % for all:</label>
                     <input type="number" value={xlsxGlobalMargin} onChange={e => setXlsxGlobalMargin(e.target.value)} min="0" step="0.1"
                       className="w-20 px-2 py-1 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <div className="flex gap-2 ml-auto text-xs">
+                      {xlsxPreview.filter(i => !i._exists).length > 0 && <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-medium">{xlsxPreview.filter(i => !i._exists).length} new</span>}
+                      {xlsxPreview.filter(i => i._exists).length > 0 && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">{xlsxPreview.filter(i => i._exists).length} update</span>}
+                    </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto px-6 py-4">
+                  <div className="flex-1 overflow-y-auto">
                     <table className="w-full text-xs">
-                      <thead className="text-gray-500 uppercase tracking-wide">
-                        <tr><th className="text-left py-1">Item</th><th className="text-right py-1">Price</th><th className="text-left py-1 px-2">Unit</th><th className="text-left py-1 px-2">Description</th></tr>
+                      <thead className="bg-white sticky top-0 border-b border-gray-100 text-gray-500 uppercase tracking-wide">
+                        <tr>
+                          <th className="text-left px-4 py-2">Item</th>
+                          <th className="text-right px-3 py-2">Price</th>
+                          <th className="text-left px-3 py-2">Unit</th>
+                          <th className="text-left px-3 py-2">Status</th>
+                          <th className="w-8 py-2" />
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {xlsxPreview.map((item, i) => (
-                          <tr key={i}>
-                            <td className="py-1.5 font-medium text-gray-800">{item.name}</td>
-                            <td className="py-1.5 text-right text-gray-600">{item.unit_price || '—'}</td>
-                            <td className="py-1.5 px-2 text-gray-500">{item.unit || '—'}</td>
-                            <td className="py-1.5 px-2 text-gray-400 truncate max-w-[120px]">{item.description || '—'}</td>
+                          <tr key={i} className="bg-white hover:bg-gray-50/60">
+                            <td className="px-4 py-2 font-medium text-gray-800">{item.name}</td>
+                            <td className="px-3 py-2 text-right text-gray-600">{item.unit_price || '—'}</td>
+                            <td className="px-3 py-2 text-gray-500">{item.unit || '—'}</td>
+                            <td className="px-3 py-2">
+                              {item._exists
+                                ? <span className="text-blue-600 font-medium">update</span>
+                                : <span className="text-green-600 font-medium">new</span>}
+                            </td>
+                            <td className="pr-3 py-2 text-center">
+                              <button
+                                onClick={() => setXlsxPreview(prev => prev ? prev.filter((_, j) => j !== i) : prev)}
+                                className="text-gray-300 hover:text-red-500 transition font-bold text-base leading-none"
+                                title="Remove this item">×</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    {xlsxPreview.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-6">All items removed. Click Cancel to go back.</p>
+                    )}
                   </div>
                   <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
-                    <button onClick={confirmXlsxImport} disabled={xlsxSaving}
+                    <button onClick={confirmXlsxImport} disabled={xlsxSaving || xlsxPreview.length === 0}
                       className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                      {xlsxSaving ? 'Importing...' : `✓ Import ${xlsxPreview.length} Items`}
+                      {xlsxSaving ? 'Importing...' : `Import ${xlsxPreview.length} item${xlsxPreview.length !== 1 ? 's' : ''}`}
                     </button>
                     <button onClick={() => setXlsxPreview(null)} disabled={xlsxSaving}
                       className="px-4 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
@@ -1464,8 +1495,8 @@ export default function SettingsPage() {
                                 <p className="text-sm font-medium text-gray-800">{s.name}</p>
                                 {s.label && <span className="inline-block mt-0.5 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{s.label}</span>}
                                 <div className="flex flex-wrap gap-2 mt-1">
-                                  {s.contact_email && <span className="text-xs text-gray-500">✉ {s.contact_email}</span>}
-                                  {s.whatsapp && <span className="text-xs text-gray-500">💬 {s.whatsapp}</span>}
+                                  {s.contact_email && <span className="text-xs text-gray-500">{s.contact_email}</span>}
+                                  {s.whatsapp && <span className="text-xs text-gray-500">{s.whatsapp}</span>}
                                 </div>
                                 {s.notes && <p className="text-xs text-gray-400 mt-1">{s.notes}</p>}
                               </div>
@@ -1499,7 +1530,7 @@ export default function SettingsPage() {
             {showQuoteBuilder && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-800 text-sm">🔗 Create Quote Request Link</h3>
+                  <h3 className="font-semibold text-gray-800 text-sm">Create Quote Request Link</h3>
                   <button onClick={() => { setShowQuoteBuilder(false); setQuoteLink(''); setQuoteItems([{ name: '', description: '', unit: '', qty: 1 }]); }}
                     className="text-xs text-gray-400 hover:text-gray-700">✕ Close</button>
                 </div>
@@ -1536,7 +1567,7 @@ export default function SettingsPage() {
 
                 <button onClick={createQuoteLink} disabled={creatingQuote || !quoteItems.some(i => i.name.trim())}
                   className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
-                  {creatingQuote ? 'Generating...' : '🔗 Generate Quote Link'}
+                  {creatingQuote ? 'Generating...' : 'Generate Quote Link'}
                 </button>
 
                 {quoteLink && (
@@ -1553,7 +1584,7 @@ export default function SettingsPage() {
                       const supp = suppliersData.find(s => s.name === quoteSupplier);
                       return supp?.contact_email ? (
                         <a href={`mailto:${supp.contact_email}?subject=${encodeURIComponent(quoteTitle)}&body=${encodeURIComponent(`Hello ${supp.name},\n\nWe would like to request pricing for the following items. Please click the link below to fill in your prices:\n\n${quoteLink}\n\nThank you,\n${company.company_name || ''}`)}`}
-                          className="inline-block mt-1 text-xs text-blue-600 hover:text-blue-700 font-medium">✉ Open in email →</a>
+                          className="inline-block mt-1 text-xs text-blue-600 hover:text-blue-700 font-medium">Open in email →</a>
                       ) : null;
                     })()}
                     {/* WhatsApp the link */}
@@ -1562,7 +1593,7 @@ export default function SettingsPage() {
                       return supp?.whatsapp ? (
                         <a href={`https://wa.me/${supp.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${supp.name}, we would like to request pricing. Please fill in your prices here: ${quoteLink}`)}`}
                           target="_blank" rel="noopener noreferrer"
-                          className="inline-block mt-1 ml-2 text-xs text-green-600 hover:text-green-700 font-medium">💬 Send on WhatsApp →</a>
+                          className="inline-block mt-1 ml-2 text-xs text-green-600 hover:text-green-700 font-medium">Send on WhatsApp →</a>
                       ) : null;
                     })()}
                   </div>
@@ -1572,7 +1603,7 @@ export default function SettingsPage() {
 
             {/* Submitted quotes inbox */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
-              <h3 className="font-semibold text-gray-800 text-sm">📥 Quote Responses ({quoteRequests.filter(q => q.status === 'submitted').length} new)</h3>
+              <h3 className="font-semibold text-gray-800 text-sm">Quote Responses ({quoteRequests.filter(q => q.status === 'submitted').length} new)</h3>
               {quoteRequests.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-4">No quote requests sent yet.</p>
               ) : (

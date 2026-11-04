@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await client
       .from('pricing_items')
-      .upsert(rows, { onConflict: 'id' })
+      .upsert(rows, { onConflict: 'user_id,name', ignoreDuplicates: false })
       .select();
 
     if (error) {

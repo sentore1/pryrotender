@@ -177,6 +177,10 @@ create policy "Users can manage own pricing items"
   using  (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- Unique constraint so re-importing the same item name updates instead of duplicating
+alter table pricing_items
+  add constraint pricing_items_user_name_unique unique (user_id, name);
+
 create table if not exists suppliers (
   id            uuid default gen_random_uuid() primary key,
   user_id       uuid references profiles(id) on delete cascade not null,
