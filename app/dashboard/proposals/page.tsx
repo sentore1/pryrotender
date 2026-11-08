@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+import SendEmailModal from '@/components/SendEmailModal';
 import {
   Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
@@ -371,11 +372,24 @@ ${bodyHtml}
 
 type Proposal = { id: string; tender_name: string; content: string; created_at: string };
 
+// ── Extract contact emails from proposal content ──────────────────────────────
+function hasContactEmail(content: string): boolean {
+  const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const matches = content.match(EMAIL_RE) || [];
+  return matches.some(e =>
+    !e.includes('example.com') &&
+    !e.includes('test.com') &&
+    !e.endsWith('.png') &&
+    !e.endsWith('.jpg')
+  );
+}
+
 export default function ProposalsPage() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState<Proposal | null>(null);
   const [deleting, setDeleting]   = useState<string | null>(null);
+  const [emailTarget, setEmailTarget] = useState<Proposal | null>(null);
 
   useEffect(() => {
     // Fetch directly from Supabase client-side — no cookie auth issues
@@ -442,6 +456,15 @@ export default function ProposalsPage() {
                     className="text-xs px-3 py-1.5 text-gray-800 font-semibold rounded hover:bg-gray-100 border border-gray-200">
                     View
                   </button>
+                  {hasContactEmail(p.content) && (
+                    <button onClick={() => setEmailTarget(p)}
+                      className="text-xs px-3 py-1.5 text-gray-700 font-semibold rounded-lg hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
+                      </svg>
+                      Send
+                    </button>
+                  )}
                   <button onClick={() => downloadDocx(p.content, `proposal_${p.tender_name.replace(/\s+/g, '_')}.docx`)}
                     className="text-xs px-3 py-1.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">
                     ↓ DOCX
@@ -469,12 +492,20 @@ export default function ProposalsPage() {
                 <p className="text-xs text-gray-400">
                   {new Date(selected.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
+              </div>              <div className="flex flex-wrap gap-2">
                 <button onClick={() => navigator.clipboard.writeText(selected.content)}
                   className="text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-gray-50 border border-gray-200">
                   Copy
                 </button>
+                {hasContactEmail(selected.content) && (
+                  <button onClick={() => setEmailTarget(selected)}
+                    className="text-xs text-gray-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
+                    </svg>
+                    Send
+                  </button>
+                )}
                 <button onClick={() => downloadDocx(selected.content, `proposal_${selected.tender_name.replace(/\s+/g, '_')}.docx`)}
                   className="text-xs bg-blue-600 text-white hover:bg-blue-700 px-3 py-1.5 rounded-lg font-semibold">
                   ↓ DOCX
@@ -489,6 +520,9 @@ export default function ProposalsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Send Email Modal ── */}
+      <SendEmailModal proposal={emailTarget} onClose={() => setEmailTarget(null)} />
     </div>
   );
 }

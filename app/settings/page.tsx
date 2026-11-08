@@ -42,8 +42,10 @@ export default function SettingsPage() {
   const [company, setCompany] = useState({ company_name: '', company_address: '', company_phone: '', company_email: '', company_website: '', company_ref_prefix: '' });
   const [logoUrl, setLogoUrl] = useState('');
   const [sigUrl, setSigUrl] = useState('');
+  const [stampUrl, setStampUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [sigFile, setSigFile] = useState<File | null>(null);
+  const [stampFile, setStampFile] = useState<File | null>(null);
 
   const [notif, setNotif] = useState({ enabled: false, frequency: 'daily', keywords: [] as string[], categories: [] as string[], notification_email: '', extra_emails: [] as string[] });
   const [kwInput, setKwInput] = useState('');
@@ -128,6 +130,7 @@ export default function SettingsPage() {
         setCompany({ company_name: p.company_name || '', company_address: p.company_address || '', company_phone: p.company_phone || '', company_email: p.company_email || '', company_website: p.company_website || '', company_ref_prefix: p.company_ref_prefix || '' });
         setLogoUrl(p.logo_url || '');
         setSigUrl(p.signature_url || '');
+        setStampUrl(p.stamp_url || '');
         setBio(p.company_bio || '');
         setRequiredDocs(p.required_documents || []);
         setFormerClients(p.former_clients || []);
@@ -178,12 +181,13 @@ export default function SettingsPage() {
   const saveCompany = async () => {
     setSaving(true);
     try {
-      let logo = logoUrl, sig = sigUrl;
+      let logo = logoUrl, sig = sigUrl, stamp = stampUrl;
       if (logoFile) logo = await uploadFile(logoFile, `${userIdRef.current}/logo`);
       if (sigFile) sig = await uploadFile(sigFile, `${userIdRef.current}/signature`);
-      const { error } = await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig }).eq('id', userIdRef.current);
+      if (stampFile) stamp = await uploadFile(stampFile, `${userIdRef.current}/stamp`);
+      const { error } = await supabase.from('profiles').update({ ...company, logo_url: logo, signature_url: sig, stamp_url: stamp }).eq('id', userIdRef.current);
       if (error) throw error;
-      setLogoUrl(logo); setSigUrl(sig); setLogoFile(null); setSigFile(null);
+      setLogoUrl(logo); setSigUrl(sig); setStampUrl(stamp); setLogoFile(null); setSigFile(null); setStampFile(null);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e: any) {
       alert(e.message?.includes('Bucket') ? 'Storage bucket not found.' : e.message);
@@ -218,9 +222,13 @@ export default function SettingsPage() {
   const sendTestNotification = async () => {
     setTesting(true); setTestResult('');
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/notifications/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.NEXT_PUBLIC_CRON_SECRET || '' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ test: true, userId: userIdRef.current }),
       });
       const data = await res.json();
@@ -684,19 +692,59 @@ export default function SettingsPage() {
                 </div>
               </div>
             ))}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Company Logo</label>
-                <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setLogoFile(f); setLogoUrl(URL.createObjectURL(f)); } }}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
-                {logoUrl && <img src={logoUrl} className="mt-2 h-12 object-contain rounded border border-gray-100" alt="logo" />}
+            {/* Logo — full width row */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Company Logo</label>
+              <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setLogoFile(f); setLogoUrl(URL.createObjectURL(f)); } }}
+                className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
+              {logoUrl && (
+                <div className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                  <img src={logoUrl} className="h-10 object-contain" alt="logo" />
+                </div>
+              )}
+            </div>
+
+            {/* Signature + Stamp — side by side, stamp overlaid on signature preview */}
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-2">Signature &amp; Stamp</p>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Signature */}
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Signature</label>
+                  <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setSigFile(f); setSigUrl(URL.createObjectURL(f)); } }}
+                    className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
+                </div>
+                {/* Stamp */}
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Stamp</label>
+                  <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setStampFile(f); setStampUrl(URL.createObjectURL(f)); } }}
+                    className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Signature / Stamp</label>
-                <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setSigFile(f); setSigUrl(URL.createObjectURL(f)); } }}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
-                {sigUrl && <img src={sigUrl} className="mt-2 h-12 object-contain rounded border border-gray-100" alt="signature" />}
-              </div>
+
+              {/* Preview: signature with stamp overlaid on top-right corner */}
+              {(sigUrl || stampUrl) && (
+                <div className="mt-3 flex items-end gap-4">
+                  {sigUrl && (
+                    <div className="relative inline-block">
+                      <img src={sigUrl} className="h-16 object-contain rounded border border-gray-100 bg-white p-1" alt="signature" />
+                      {stampUrl && (
+                        <img
+                          src={stampUrl}
+                          className="absolute -top-3 -right-3 h-10 w-10 object-contain rounded-full border border-gray-200 bg-white shadow-sm"
+                          alt="stamp"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {stampUrl && !sigUrl && (
+                    <div className="inline-block">
+                      <img src={stampUrl} className="h-16 w-16 object-contain rounded-full border border-gray-100 bg-white p-1" alt="stamp" />
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 pb-1">Preview — how it appears on proposals</p>
+                </div>
+              )}
             </div>
             <button onClick={saveCompany} disabled={saving}
               className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm">

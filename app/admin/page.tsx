@@ -35,6 +35,21 @@ interface SubRecord {
   pesapal_tracking_id: string | null;
 }
 
+interface PendingPayment {
+  id: string;
+  user_id: string;
+  email: string;
+  company_name: string | null;
+  plan: string;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_method: string;
+  payment_reference: string;
+  reference_uploaded_at: string;
+  created_at: string;
+}
+
 interface AnalyticsSummary {
   totalUsers: number;
   activeUsers: number;
@@ -111,7 +126,7 @@ function StatCard({ label, value, sub, color, Icon }: { label: string; value: st
 export default function AdminPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'users' | 'subscriptions' | 'visitors'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'subscriptions' | 'visitors' | 'payments'>('overview');
 
   // analytics
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -150,6 +165,19 @@ export default function AdminPage() {
   // delete confirm
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // pending payments
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [paymentActionLoading, setPaymentActionLoading] = useState<string | null>(null);
+
+  // MoMo settings
+  const [momoEnabled, setMomoEnabled] = useState(true);
+  const [momoNumber, setMomoNumber] = useState('');
+  const [momoName, setMomoName] = useState('');
+  const [momoSettingsLoading, setMomoSettingsLoading] = useState(false);
+  const [momoSettingsSaved, setMomoSettingsSaved] = useState(false);
 
   // action feedback
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -212,7 +240,7 @@ export default function AdminPage() {
     setUsersLoading(false);
   }, [api, token]);
 
-  useEffect(() => { if (token) { loadAnalytics(); loadUsers(); } }, [token]);
+  useEffect(() => { if (token) { loadAnalytics(); loadUsers(); loadPendingPayments(); } }, [token]);
 
   // ── Load visitor analytics ────────────────────────────────────────────────
   const loadVisitors = useCallback(async (days = vDays) => {
@@ -293,6 +321,79 @@ export default function AdminPage() {
     setDeleteLoading(false);
   };
 
+  // ── Load pending payments ─────────────────────────────────────────────────
+  const loadPendingPayments = useCallback(async () => {
+    if (!token) return;
+    setPendingLoading(true);
+    const data = await api('GET', { action: 'pending-payments' });
+    if (data && !data.error) setPendingPayments(data.payments || []);
+    setPendingLoading(false);
+  }, [api, token]);
+
+
+  // ── Approve payment ───────────────────────────────────────────────────────
+  const handleApprove = async (p: PendingPayment) => {
+    setPaymentActionLoading(p.id + '-approve');
+    const data = await api('POST', {}, { action: 'approve-payment', subscriptionId: p.id });
+    if (data?.success) {
+      showToast(`✅ Payment approved — ${p.email} is now active until ${data.newEnd}`);
+      loadPendingPayments();
+      loadUsers();
+    } else showToast(data?.error || 'Failed to approve', false);
+    setPaymentActionLoading(null);
+  };
+
+  // ── Reject payment ────────────────────────────────────────────────────────
+  const handleReject = async (p: PendingPayment) => {
+    setPaymentActionLoading(p.id + '-reject');
+    const data = await api('POST', {}, { action: 'reject-payment', subscriptionId: p.id });
+    if (data?.success) {
+      showToast(`Payment rejected for ${p.email}`, false);
+      loadPendingPayments();
+    } else showToast(data?.error || 'Failed to reject', false);
+    setPaymentActionLoading(null);
+  };
+
+  // ── Load MoMo settings ────────────────────────────────────────────────────
+  const loadMomoSettings = useCallback(async () => {
+    if (!token) return;
+    const data = await api('GET', { action: 'get-settings' });
+    if (data?.settings) {
+      setMomoEnabled(data.settings.momo_enabled !== 'false');
+      setMomoNumber(data.settings.momo_number || '');
+      setMomoName(data.settings.momo_name || '');
+    }
+  }, [api, token]);
+
+  useEffect(() => {
+    if (tab === 'payments' && token) {
+      loadPendingPayments();
+      loadMomoSettings();
+    }
+  }, [tab, token]);
+
+  // ── Save MoMo settings ────────────────────────────────────────────────────
+  const saveMomoSettings = async () => {
+    setMomoSettingsLoading(true);
+    setMomoSettingsSaved(false);
+    const data = await api('POST', {}, {
+      action: 'update-settings',
+      settings: {
+        momo_enabled: momoEnabled ? 'true' : 'false',
+        momo_number: momoNumber,
+        momo_name: momoName,
+      },
+    });
+    if (data?.success) {
+      setMomoSettingsSaved(true);
+      showToast('MoMo settings saved');
+      setTimeout(() => setMomoSettingsSaved(false), 3000);
+    } else {
+      showToast(data?.error || 'Failed to save', false);
+    }
+    setMomoSettingsLoading(false);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     document.cookie = 'sb-access-token=; path=/; max-age=0';
@@ -342,6 +443,7 @@ export default function AdminPage() {
             { key: 'overview',       label: 'Overview',       Icon: LayoutDashboard },
             { key: 'users',          label: 'Users',          Icon: Users },
             { key: 'subscriptions',  label: 'Subscriptions',  Icon: CreditCard },
+            { key: 'payments',       label: 'Payments',       Icon: CheckCircle2, badge: pendingPayments.length },
             { key: 'visitors',       label: 'Visitors',       Icon: Eye },
           ] as const).map(t => (
             <button
@@ -351,6 +453,11 @@ export default function AdminPage() {
             >
               <t.Icon size={14} />
               {t.label}
+              {'badge' in t && t.badge > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${tab === t.key ? 'bg-white text-blue-600' : 'bg-amber-500 text-white'}`}>
+                  {t.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -649,6 +756,191 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ══════════════════ PAYMENTS TAB ══════════════════ */}
+        {tab === 'payments' && (
+          <div className="space-y-5">
+
+            {/* ── MoMo Settings card ─────────────────────────────────────── */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800">MoMo Payment Settings</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Controls whether MoMo appears as a payment option on the checkout page</p>
+                </div>
+                {/* Toggle pill */}
+                <button
+                  onClick={() => setMomoEnabled(v => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                    momoEnabled ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      momoEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className={`space-y-3 transition-all ${momoEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1">MoMo Number</label>
+                  <input
+                    type="text"
+                    value={momoNumber}
+                    onChange={e => setMomoNumber(e.target.value)}
+                    placeholder="e.g. 0789123456"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1">Account Name</label>
+                  <input
+                    type="text"
+                    value={momoName}
+                    onChange={e => setMomoName(e.target.value)}
+                    placeholder="e.g. PryroTender"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={saveMomoSettings}
+                  disabled={momoSettingsLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {momoSettingsLoading ? 'Saving…' : 'Save Settings'}
+                </button>
+                {momoSettingsSaved && (
+                  <span className="text-xs font-semibold text-green-600 flex items-center gap-1">
+                    <CheckCircle2 size={13} /> Saved
+                  </span>
+                )}
+                <span className={`ml-auto text-xs font-semibold px-2 py-1 rounded-full ${momoEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {momoEnabled ? '✓ MoMo visible to users' : '✗ MoMo hidden from users'}
+                </span>
+              </div>
+            </div>
+
+            {/* ── Pending approvals ──────────────────────────────────────── */}
+            <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Pending Payment Approvals
+                {pendingPayments.length > 0 && (
+                  <span className="ml-2 text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                    {pendingPayments.length}
+                  </span>
+                )}
+              </h2>
+              <button
+                onClick={loadPendingPayments}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                <RefreshCw size={13} /> Refresh
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              {pendingLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
+                </div>
+              ) : pendingPayments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                  <CheckCircle2 size={36} className="text-gray-200" />
+                  <p className="text-sm">No pending payments — all clear!</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {pendingPayments.map(p => (
+                    <div key={p.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                      {/* Reference thumbnail */}
+                      <button
+                        onClick={() => setPreviewUrl(p.payment_reference)}
+                        className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex-shrink-0 hover:ring-2 hover:ring-blue-400 transition"
+                        title="View proof"
+                      >
+                        {p.payment_reference.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                          <img
+                            src={p.payment_reference}
+                            alt="Payment proof"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <FileText size={22} className="text-gray-400" />
+                          </div>
+                        )}
+                      </button>
+
+                      {/* User + payment info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className="text-sm font-semibold text-gray-800 truncate">
+                            {p.company_name || p.email}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            p.payment_method === 'momo'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {p.payment_method === 'momo' ? '📱 MoMo' : '💳 Pesapal'}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                            p.plan === 'annual'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {p.plan}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 truncate">{p.email}</p>
+                        <div className="flex flex-wrap gap-3 mt-1 text-[11px] text-gray-400">
+                          <span className="font-semibold text-gray-700">{p.currency} {p.amount}</span>
+                          <span>Submitted: {p.reference_uploaded_at
+                            ? new Date(p.reference_uploaded_at).toLocaleString()
+                            : new Date(p.created_at).toLocaleString()
+                          }</span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setPreviewUrl(p.payment_reference)}
+                          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                        >
+                          <Eye size={12} /> View
+                        </button>
+                        <button
+                          onClick={() => handleApprove(p)}
+                          disabled={paymentActionLoading === p.id + '-approve'}
+                          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-40"
+                        >
+                          <CheckCircle2 size={12} />
+                          {paymentActionLoading === p.id + '-approve' ? 'Approving…' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleReject(p)}
+                          disabled={paymentActionLoading === p.id + '-reject'}
+                          className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition disabled:opacity-40"
+                        >
+                          <XCircle size={12} />
+                          {paymentActionLoading === p.id + '-reject' ? 'Rejecting…' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            </div>
+          </div>
+        )}
+
         {/* ══════════════════ VISITORS TAB ══════════════════ */}
         {tab === 'visitors' && (
           <div>
@@ -774,6 +1066,61 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* ══════════════════ REFERENCE PREVIEW MODAL ══════════════════ */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-800">Payment Proof</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                >
+                  Open Full Size ↗
+                </a>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="text-gray-400 hover:text-gray-600 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gray-50">
+              {previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                <img
+                  src={previewUrl}
+                  alt="Payment reference"
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-12 text-gray-400">
+                  <FileText size={48} className="text-gray-300" />
+                  <p className="text-sm">PDF file — open in full size to view</p>
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-semibold px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Open PDF ↗
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════ EXTEND MODAL ══════════════════ */}
       {extendTarget && (

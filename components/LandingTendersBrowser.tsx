@@ -164,6 +164,17 @@ export default function LandingTendersBrowser() {
       if (pg > 1) params.set('page', String(pg));
 
       const res = await fetch(`/api/tenders/browse?${params.toString()}`, { signal: ctrl.signal });
+
+      // Guard against non-JSON responses (e.g. a 404 HTML page) before parsing
+      if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) {
+        if (!ctrl.signal.aborted) {
+          setRows([]);
+          setTotal(0);
+          setLoading(false);
+        }
+        return;
+      }
+
       const data = await res.json();
 
       // Only update state if this request wasn't superseded

@@ -7,12 +7,12 @@ const BASE = process.env.PESAPAL_ENV === 'live'
 
 const PLANS = {
   monthly: {
-    RWF:  { amount: 100,  currency: 'RWF',  description: 'PryroTender Monthly Subscription' },
-    USDT: { amount: 10,   currency: 'USD',  description: 'PryroTender Monthly Subscription' },
+    RWF:  { amount: 15000, currency: 'RWF', description: 'PryroTender Monthly Subscription' },
+    USDT: { amount: 10,    currency: 'USD', description: 'PryroTender Monthly Subscription' },
   },
   annual: {
-    RWF:  { amount: 100,  currency: 'RWF',  description: 'PryroTender Annual Subscription' },
-    USDT: { amount: 99,   currency: 'USD',  description: 'PryroTender Annual Subscription' },
+    RWF:  { amount: 165000, currency: 'RWF', description: 'PryroTender Annual Subscription' },
+    USDT: { amount: 112,    currency: 'USD', description: 'PryroTender Annual Subscription' },
   },
 };
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     const orderData = await orderRes.json();
     if (orderData.redirect_url) {
       await db.from('subscriptions').update({ pesapal_order_id: orderData.order_tracking_id }).eq('id', sub.id);
-      return NextResponse.json({ redirect_url: orderData.redirect_url });
+      return NextResponse.json({ redirect_url: orderData.redirect_url, subscriptionId: sub.id });
     }
     throw new Error(orderData.error?.message || 'Failed to create payment order');
   } catch (e: any) {

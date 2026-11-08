@@ -1,17 +1,17 @@
 export const PRICES = {
   RWF: {
-    monthly: '100 RWF',
-    annual: '100 RWF',
+    monthly: '15,000 RWF',
+    annual: '165,000 RWF',
     monthlySub: '/month',
-    annualSub: '/year · save 100 RWF',
-    save: 'Save 100 RWF vs monthly',
+    annualSub: '/year · save 15,000 RWF',
+    save: 'Save 15,000 RWF (1 month free)',
   },
   USDT: {
     monthly: '$10',
-    annual: '$99',
+    annual: '$112',
     monthlySub: '/month',
-    annualSub: '/year · save $21',
-    save: 'Save $21 USDT vs monthly',
+    annualSub: '/year · save $8',
+    save: 'Save $8 vs monthly',
   },
 } as const;
 

@@ -51,7 +51,7 @@ export default function SidebarPricing() {
             >
               {t}
               {t === 'annual' && (
-                <span className="ml-1 text-[10px] font-bold text-green-400">-17%</span>
+                <span className="ml-1 text-[10px] font-bold text-green-400">-8%</span>
               )}
             </button>
           ))}

@@ -4,14 +4,29 @@ import { sendEmail } from '@/lib/mail';
 import { scrapeTenders } from '@/lib/scraper';
 
 export async function POST(req: NextRequest) {
-  const auth = req.headers.get('x-cron-secret');
-  if (auth !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const body = await req.json().catch(() => ({}));
   const isTest = body?.test === true;
   const testUserId = body?.userId;
+
+  // For non-test (cron) calls, require the cron secret header
+  if (!isTest) {
+    const auth = req.headers.get('x-cron-secret');
+    if (auth !== process.env.CRON_SECRET && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
+  // For test calls, validate the user is authenticated and owns the userId
+  if (isTest && testUserId) {
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const db = supabaseAdmin();
+    const { data: { user }, error } = await db.auth.getUser(token);
+    if (error || !user || user.id !== testUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
 
   const db = supabaseAdmin();
 

@@ -145,6 +145,49 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subscriptions: subs || [] });
   }
 
+  // ── Get public settings (e.g. momo_enabled) ──────────────────────────────
+  if (action === 'get-settings') {
+    const keys = ['momo_enabled', 'momo_number', 'momo_name'];
+    const { data } = await db.from('settings').select('key, value').in('key', keys);
+    const result: Record<string, string> = {};
+    (data || []).forEach(r => { result[r.key] = r.value; });
+    // Defaults if not yet set
+    if (!result.momo_enabled) result.momo_enabled = 'true';
+    if (!result.momo_number)  result.momo_number  = '0789XXXXXX';
+    if (!result.momo_name)    result.momo_name    = 'PryroTender';
+    return NextResponse.json({ settings: result });
+  }
+
+  // ── Pending payments awaiting admin approval ──────────────────────────────
+  if (action === 'pending-payments') {
+    const { data: subs } = await db
+      .from('subscriptions')
+      .select(`
+        id, user_id, plan, amount, currency, status,
+        payment_method, payment_reference, reference_uploaded_at, created_at
+      `)
+      .in('status', ['awaiting_approval', 'pending'])
+      .not('payment_reference', 'is', null)
+      .order('reference_uploaded_at', { ascending: true });
+
+    // Enrich with user info
+    const userIds = [...new Set((subs || []).map(s => s.user_id))];
+    const { data: profiles } = userIds.length
+      ? await db.from('profiles').select('id, email, company_name').in('id', userIds)
+      : { data: [] };
+
+    const profileMap: Record<string, { email: string; company_name: string | null }> = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+    const enriched = (subs || []).map(s => ({
+      ...s,
+      email: profileMap[s.user_id]?.email ?? '—',
+      company_name: profileMap[s.user_id]?.company_name ?? null,
+    }));
+
+    return NextResponse.json({ payments: enriched });
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
 
@@ -155,6 +198,22 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { action } = body;
   const db = supabaseAdmin();
+
+  // ── Update settings (momo_enabled, momo_number, momo_name) ──────────────
+  if (action === 'update-settings') {
+    const { settings } = body as { settings: Record<string, string> };
+    if (!settings || typeof settings !== 'object') {
+      return NextResponse.json({ error: 'settings object required' }, { status: 400 });
+    }
+    const allowed = ['momo_enabled', 'momo_number', 'momo_name'];
+    const rows = Object.entries(settings)
+      .filter(([k]) => allowed.includes(k))
+      .map(([key, value]) => ({ key, value: String(value), updated_at: new Date().toISOString() }));
+
+    if (!rows.length) return NextResponse.json({ error: 'No valid keys provided' }, { status: 400 });
+    await db.from('settings').upsert(rows, { onConflict: 'key' });
+    return NextResponse.json({ success: true });
+  }
 
   // ── Extend subscription by N free months ─────────────────────────────────
   if (action === 'extend') {
@@ -220,6 +279,54 @@ export async function POST(req: NextRequest) {
 
     await db.from('profiles').update(updates).eq('id', userId);
     return NextResponse.json({ success: true, newStatus });
+  }
+
+  // ── Approve a manual payment (MoMo or Pesapal reference) ─────────────────
+  if (action === 'approve-payment') {
+    const { subscriptionId } = body;
+    if (!subscriptionId) return NextResponse.json({ error: 'subscriptionId required' }, { status: 400 });
+
+    const { data: sub, error: subErr } = await db
+      .from('subscriptions')
+      .select('*')
+      .eq('id', subscriptionId)
+      .single();
+
+    if (subErr || !sub) return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+
+    // Mark subscription paid
+    await db.from('subscriptions').update({
+      status: 'paid',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: admin.id,
+    }).eq('id', subscriptionId);
+
+    // Activate the user profile
+    const periodEnd = new Date();
+    periodEnd.setMonth(periodEnd.getMonth() + (sub.plan === 'annual' ? 12 : 1));
+
+    await db.from('profiles').update({
+      subscription_status: 'active',
+      subscription_plan: sub.plan,
+      subscription_end: periodEnd.toISOString().split('T')[0],
+    }).eq('id', sub.user_id);
+
+    return NextResponse.json({ success: true, newEnd: periodEnd.toISOString().split('T')[0] });
+  }
+
+  // ── Reject a manual payment ───────────────────────────────────────────────
+  if (action === 'reject-payment') {
+    const { subscriptionId } = body;
+    if (!subscriptionId) return NextResponse.json({ error: 'subscriptionId required' }, { status: 400 });
+
+    const { error } = await db.from('subscriptions').update({
+      status: 'rejected',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: admin.id,
+    }).eq('id', subscriptionId);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
   }
 
   // ── Delete user ───────────────────────────────────────────────────────────

@@ -328,13 +328,6 @@ export default function OnboardingTour() {
   const cardContent = (
     <>
       {/* Progress bar */}
-      <div className="h-1 bg-gray-100 overflow-hidden" style={{ borderRadius: isMobile ? '12px 12px 0 0' : '6px 6px 0 0' }}>
-        <div
-          className="h-full bg-gray-400 transition-all duration-300"
-          style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
-        />
-      </div>
-
       <div className="px-5 pt-5 pb-4">
         {/* Step counter + close */}
         <div className="flex items-center justify-between mb-3">

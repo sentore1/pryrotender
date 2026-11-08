@@ -12,6 +12,7 @@ export type ProfileData = {
   company_ref_prefix?: string;
   logo_url?: string;
   signature_url?: string;
+  stamp_url?: string;
   company_bio?: string;
   required_documents?: string[];
   former_clients?: { name: string; project: string }[];
@@ -44,8 +45,10 @@ export default function CompanyProfileModal({ open, userId, initialProfile, miss
   });
   const [logoUrl, setLogoUrl] = useState('');
   const [sigUrl, setSigUrl] = useState('');
+  const [stampUrl, setStampUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [sigFile, setSigFile] = useState<File | null>(null);
+  const [stampFile, setStampFile] = useState<File | null>(null);
 
   // ── Proposal tab state ─────────────────────────────────────────────────────
   const [bio, setBio] = useState('');
@@ -69,8 +72,10 @@ export default function CompanyProfileModal({ open, userId, initialProfile, miss
     });
     setLogoUrl(initialProfile.logo_url || '');
     setSigUrl(initialProfile.signature_url || '');
+    setStampUrl(initialProfile.stamp_url || '');
     setLogoFile(null);
     setSigFile(null);
+    setStampFile(null);
     setBio(initialProfile.company_bio || '');
     setRequiredDocs(initialProfile.required_documents || []);
     setFormerClients(initialProfile.former_clients || []);
@@ -95,13 +100,16 @@ export default function CompanyProfileModal({ open, userId, initialProfile, miss
     try {
       let logo = logoUrl;
       let sig = sigUrl;
+      let stamp = stampUrl;
       if (logoFile) logo = await uploadFile(logoFile, `${userId}/logo`);
       if (sigFile) sig = await uploadFile(sigFile, `${userId}/signature`);
+      if (stampFile) stamp = await uploadFile(stampFile, `${userId}/stamp`);
 
       const updates: ProfileData = {
         ...company,
         logo_url: logo,
         signature_url: sig,
+        stamp_url: stamp,
         company_bio: bio,
         required_documents: requiredDocs,
         former_clients: formerClients,
@@ -232,27 +240,67 @@ export default function CompanyProfileModal({ open, userId, initialProfile, miss
                 </div>
               ))}
 
-              <div className="grid grid-cols-2 gap-4 pt-1">
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Company Logo</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setLogoFile(f); setLogoUrl(URL.createObjectURL(f)); } }}
-                    className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
-                  />
-                  {logoUrl && <img src={logoUrl} className="mt-2 h-10 object-contain rounded border border-gray-100" alt="logo" />}
+              {/* Logo — full width */}
+              <div className="pt-1">
+                <label className="text-xs font-medium text-gray-600 block mb-1">Company Logo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setLogoFile(f); setLogoUrl(URL.createObjectURL(f)); } }}
+                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                />
+                {logoUrl && (
+                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                    <img src={logoUrl} className="h-10 object-contain" alt="logo" />
+                  </div>
+                )}
+              </div>
+
+              {/* Signature + Stamp — side by side inputs, combined preview */}
+              <div className="pt-1">
+                <p className="text-xs font-medium text-gray-600 mb-2">Signature &amp; Stamp</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Signature</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { setSigFile(f); setSigUrl(URL.createObjectURL(f)); } }}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Stamp</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { setStampFile(f); setStampUrl(URL.createObjectURL(f)); } }}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Signature / Stamp</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setSigFile(f); setSigUrl(URL.createObjectURL(f)); } }}
-                    className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
-                  />
-                  {sigUrl && <img src={sigUrl} className="mt-2 h-10 object-contain rounded border border-gray-100" alt="signature" />}
-                </div>
+
+                {/* Preview: signature with stamp overlaid */}
+                {(sigUrl || stampUrl) && (
+                  <div className="mt-3 flex items-end gap-4">
+                    {sigUrl && (
+                      <div className="relative inline-block">
+                        <img src={sigUrl} className="h-14 object-contain rounded border border-gray-100 bg-white p-1" alt="signature" />
+                        {stampUrl && (
+                          <img
+                            src={stampUrl}
+                            className="absolute -top-3 -right-3 h-9 w-9 object-contain rounded-full border border-gray-200 bg-white shadow-sm"
+                            alt="stamp"
+                          />
+                        )}
+                      </div>
+                    )}
+                    {stampUrl && !sigUrl && (
+                      <img src={stampUrl} className="h-14 w-14 object-contain rounded-full border border-gray-100 bg-white p-1" alt="stamp" />
+                    )}
+                    <p className="text-xs text-gray-400 pb-1">Preview</p>
+                  </div>
+                )}
               </div>
             </>
           )}
