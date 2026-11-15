@@ -309,7 +309,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 space-y-5">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 space-y-5">
             {/* Logo + icon on same row */}
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center">
@@ -358,7 +358,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 space-y-5">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6 space-y-5">
             <div className="text-center">
               <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
               <h1 className="text-lg font-bold text-gray-900 mt-3">Send Money via MoMo</h1>
@@ -422,7 +422,7 @@ function RegisterForm() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 space-y-4">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6 space-y-4">
             <div className="text-center">
               <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain mx-auto" /></Link>
               <h1 className="text-lg font-bold text-gray-900 mt-3">Upload Payment Proof</h1>
@@ -557,7 +557,7 @@ function RegisterForm() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <form onSubmit={handleRegister} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <form onSubmit={handleRegister} className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 space-y-4">
           <div className="mb-2">
             <Link href="/"><Image src="/logo.png" alt="PryroTender" width={70} height={22} className="object-contain" /></Link>
             <h1 className="text-lg font-bold text-gray-900 mt-3">Create your account</h1>
