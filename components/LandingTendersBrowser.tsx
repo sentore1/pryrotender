@@ -57,7 +57,7 @@ function TenderCard({ row }: { row: TenderRow }) {
   const card = (
     <div
       className={`bg-white rounded-lg p-4 flex flex-col gap-2.5 transition ${isExpired ? 'opacity-70' : ''}`}
-      style={{ boxShadow: '0 -4px 8px -2px rgba(0,0,0,0.08), 4px 0 8px -2px rgba(0,0,0,0.08), -4px 0 8px -2px rgba(0,0,0,0.08)' }}
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
     >
       {/* Top row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -110,7 +110,7 @@ function SkeletonGrid() {
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       {Array.from({ length: 9 }).map((_, i) => (
         <div key={i} className="bg-white rounded-lg p-4 flex flex-col gap-2.5 animate-pulse"
-          style={{ boxShadow: '0 -4px 8px -2px rgba(0,0,0,0.06), 4px 0 8px -2px rgba(0,0,0,0.06), -4px 0 8px -2px rgba(0,0,0,0.06)' }}>
+          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div className="h-4 w-16 bg-gray-100 rounded" />
           <div className="h-4 w-full bg-gray-100 rounded" />
           <div className="h-4 w-3/4 bg-gray-100 rounded" />
